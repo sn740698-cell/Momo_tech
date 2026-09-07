@@ -3,15 +3,7 @@ setlocal
 title MOMO Fullstack Launcher
 
 cd /d "%~dp0"
-
-REM Resolve project root directory dynamically
-if exist "%~dp0Backend\manage.py" (
-    for %%I in ("%~dp0.") do set "ROOT_DIR=%%~fI\"
-) else if exist "%~dp0..\Backend\manage.py" (
-    for %%I in ("%~dp0..") do set "ROOT_DIR=%%~fI\"
-) else (
-    set "ROOT_DIR=%~dp0"
-)
+set "ROOT_DIR=%~dp0"
 
 echo ========================================================
 echo             MOMO Fullstack Server Launcher
@@ -20,12 +12,10 @@ echo Project Directory: %ROOT_DIR%
 echo.
 
 REM 1. Verify and configure Python / Virtual Environment
-echo [1/3] Checking Backend setup...
+echo [1/4] Checking Backend setup...
 if not exist "%ROOT_DIR%Backend\manage.py" (
     echo [ERROR] Backend\manage.py could not be found at:
     echo "%ROOT_DIR%Backend\manage.py"
-    echo.
-    echo Press any key to exit...
     pause >nul
     exit /b 1
 )
@@ -38,22 +28,14 @@ if exist "%ROOT_DIR%Backend\venv\Scripts\python.exe" (
     echo   * Using system Python
 )
 
-REM 2. Verify Frontend setup
+REM 2. Launch USB-C Hardware Serial Bridge
 echo.
-echo [2/3] Checking Frontend setup...
-if not exist "%ROOT_DIR%Frontend\package.json" (
-    echo [ERROR] Frontend\package.json could not be found at:
-    echo "%ROOT_DIR%Frontend\package.json"
-    echo.
-    echo Press any key to exit...
-    pause >nul
-    exit /b 1
-)
-echo   * Frontend directory verified.
+echo [2/4] Starting USB-C Hardware Companion Bridge...
+start "MOMO ESP32 USB-C Bridge" /D "%ROOT_DIR%Backend" cmd /k ""%PYTHON_EXE%" -m iot.serial_bridge"
 
 REM 3. Launch Backend in a separate window
 echo.
-echo [3/3] Launching Servers...
+echo [3/4] Launching Servers...
 echo   * Starting Django Backend on http://127.0.0.1:8000 ...
 start "Django Backend Server (Port 8000)" /D "%ROOT_DIR%Backend" cmd /k ""%PYTHON_EXE%" manage.py runserver 127.0.0.1:8000"
 
@@ -68,9 +50,10 @@ ping 127.0.0.1 -n 4 >nul
 REM 5. Open browser
 echo.
 echo ========================================================
-echo  Both servers started successfully!
+echo  All systems started successfully!
 echo   - Backend API: http://127.0.0.1:8000/api/
 echo   - Frontend:    http://localhost:5173/
+echo   - ESP32 Body:  USB-C COM Port Listening
 echo ========================================================
 echo Opening browser...
 start http://localhost:5173/

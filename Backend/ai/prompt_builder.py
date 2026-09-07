@@ -1,0 +1,76 @@
+from datetime import datetime
+from typing import List, Dict, Any, Optional
+from brain.personality import BASE_SYSTEM_PROMPT
+
+
+class PromptBuilder:
+    """
+    Constructs contextual, persona-aligned prompts merging:
+    1. MOMO Persona & JSON Schema contract
+    2. User Identity & Long-Term Memories
+    3. Live Session & Context Telemetry (Active app, idle time, session length)
+    4. Multi-turn Chat History
+    """
+
+    @classmethod
+    def build_system_prompt(
+        cls,
+        user_name: str = "User",
+        memories: Optional[List[str]] = None,
+        active_app: str = "",
+        session_minutes: int = 0,
+        idle_seconds: int = 0,
+        custom_instructions: Optional[str] = None
+    ) -> str:
+        prompt_parts = [BASE_SYSTEM_PROMPT]
+
+        # Contextual metadata block (background environment telemetry)
+        now = datetime.now()
+        context_block = [
+            f"- Current Time: {now.strftime('%Y-%m-%d %H:%M')}",
+        ]
+        if user_name and user_name.lower() not in ["user", "unknown", ""]:
+            context_block.append(f"- User Name: {user_name}")
+        if active_app:
+            context_block.append(f"- Active Window/App: {active_app}")
+        if session_minutes > 0:
+            context_block.append(f"- Session Duration: {session_minutes} minutes")
+        if idle_seconds > 0:
+            context_block.append(f"- Idle Time: {idle_seconds} seconds")
+
+        prompt_parts.append("\n[TELEMETRY & ENVIRONMENT]\n" + "\n".join(context_block))
+
+        # Long-term memory block
+        if memories and len(memories) > 0:
+            memory_lines = [f"- {m}" for m in memories]
+            prompt_parts.append("\nSTORED FACTS ABOUT USER:\n" + "\n".join(memory_lines))
+
+        # Additional instructions
+        if custom_instructions:
+            prompt_parts.append(f"\nADDITIONAL INSTRUCTIONS:\n{custom_instructions}")
+
+        return "\n\n".join(prompt_parts)
+
+    @classmethod
+    def assemble_messages(
+        cls,
+        current_input: str,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        system_prompt: Optional[str] = None
+    ) -> List[Dict[str, str]]:
+        messages = []
+
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+
+        if chat_history:
+            for msg in chat_history:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if content:
+                    messages.append({"role": role, "content": content})
+
+        if current_input:
+            messages.append({"role": "user", "content": current_input})
+
+        return messages

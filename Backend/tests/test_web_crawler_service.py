@@ -1,6 +1,7 @@
 """
 Unit Tests for LiveWebCrawlerService.
-Verifies HTML cleaning, Google News RSS feed parsing, and real-time context gathering.
+Verifies HTML cleaning, national news feeds, Wikipedia observances,
+paywall filtering, and real-time context gathering.
 """
 import unittest
 import asyncio
@@ -27,32 +28,15 @@ class TestLiveWebCrawlerService(unittest.TestCase):
         self.assertNotIn("Copyright", cleaned)
         self.assertEqual(cleaned, "The Cabinet approved the new policy yesterday & today.")
 
-    def test_parse_sample_rss(self):
-        sample_xml = """<rss version="2.0">
-            <channel>
-                <item>
-                    <title>Cabinet Approves Railway Project - Press Information Bureau</title>
-                    <link>https://news.google.com/articles/CAIiE...</link>
-                    <pubDate>Sun, 06 Sep 2026 14:30:00 GMT</pubDate>
-                    <description>&lt;a href="..."&gt;Full details of the infrastructure project...&lt;/a&gt;</description>
-                    <source url="https://pib.gov.in">Press Information Bureau</source>
-                </item>
-            </channel>
-        </rss>"""
+    def test_is_valid_article_body(self):
+        title = "Cabinet Approves High-Speed Rail Project"
+        good_body = "The Union Cabinet on Monday approved the high-speed rail corridor connecting major industrial zones."
+        paywall_body = "Subscribed with another email? Logout and login. Unlock these with subscription."
+        unrelated_body = "Today's cache: download top 5 tech stories. Data point decoding the headlines."
 
-        with patch("httpx.AsyncClient.get") as mock_get:
-            mock_resp = AsyncMock()
-            mock_resp.status_code = 200
-            mock_resp.text = sample_xml
-            mock_get.return_value = mock_resp
-
-            results = asyncio.run(self.crawler.search_google_news("Indian government", max_results=1))
-            self.assertEqual(len(results), 1)
-            item = results[0]
-            self.assertEqual(item["title"], "Cabinet Approves Railway Project")
-            self.assertEqual(item["source"], "Press Information Bureau")
-            self.assertIn("Full details of the infrastructure project", item["snippet"])
-            self.assertEqual(item["pub_date"], "Sun, 06 Sep 2026 14:30:00 GMT")
+        self.assertTrue(self.crawler.is_valid_article_body(title, good_body))
+        self.assertFalse(self.crawler.is_valid_article_body(title, paywall_body))
+        self.assertFalse(self.crawler.is_valid_article_body(title, unrelated_body))
 
     def test_gather_realtime_context(self):
         sample_items = [
@@ -62,11 +46,12 @@ class TestLiveWebCrawlerService(unittest.TestCase):
                 "url": "https://example.com/news/1",
                 "pub_date": "Sun, 06 Sep 2026",
                 "snippet": "Short summary of the policy decision.",
-                "content": "Short summary of the policy decision."
+                "content": "Major Policy Decision. Short summary of the policy decision."
             }
         ]
 
-        with patch.object(self.crawler, "search_google_news", return_value=sample_items):
+        with patch.object(self.crawler, "fetch_direct_national_news", new_callable=AsyncMock) as mock_news:
+            mock_news.return_value = sample_items
             res = asyncio.run(self.crawler.gather_realtime_context(
                 query="Indian government",
                 target_date="2026-09-06",
@@ -75,6 +60,28 @@ class TestLiveWebCrawlerService(unittest.TestCase):
             self.assertEqual(len(res), 1)
             self.assertEqual(res[0]["title"], "Major Policy Decision")
             self.assertEqual(res[0]["source"], "PIB")
+
+    def test_special_day_wikipedia_lookup(self):
+        sample_wiki = [
+            {
+                "title": "International Day of Clean Air",
+                "source": "Wikipedia Observances",
+                "url": "https://en.wikipedia.org/wiki/Clean_Air",
+                "pub_date": "Calendar 09-07",
+                "snippet": "Observed globally.",
+                "content": "Observed globally."
+            }
+        ]
+
+        with patch.object(self.crawler, "fetch_special_days_wikipedia", new_callable=AsyncMock) as mock_wiki:
+            mock_wiki.return_value = sample_wiki
+            res = asyncio.run(self.crawler.gather_realtime_context(
+                query="what special today is",
+                target_date="2026-09-07",
+                target_label="today"
+            ))
+            self.assertGreaterEqual(len(res), 1)
+            self.assertEqual(res[0]["title"], "International Day of Clean Air")
 
 
 if __name__ == "__main__":

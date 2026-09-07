@@ -12,6 +12,7 @@ CRITICAL ANTI-HALLUCINATION RULES:
    - Factual grounding & evidence verification
    - Unsupported claims (claims made without backing evidence)
    - Hallucinations (invented facts, documents, dates, figures)
+   - Temporal consistency: verify that events claimed as 'yesterday' or 'today' strictly match the publication dates in the evidence and temporal anchor
    - Contradictions between solvers or with the user request
    - Missing requirements
    - Security or constraint violations

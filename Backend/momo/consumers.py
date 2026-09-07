@@ -14,6 +14,7 @@ from iot.serial_bridge import get_serial_bridge
 from security.permissions import PermissionManager
 from memory.repository import MemoryRepository
 from memory.memory_manager import MemoryManager
+from ai.response_parser import ResponseParser
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,11 @@ class MomoConsumer(AsyncJsonWebsocketConsumer):
                     thinking_text = None
                     speak = True
                     model_used = "hf.co/hugging-quants/Llama-3.2-1B-Instruct-Q8_0-GGUF:Q8_0"
+
+                # Guaranteed guard: strip any residual JSON scaffolding or cutoff excuses
+                msg_text = ResponseParser.clean_text(str(msg_text))
+                if not msg_text or msg_text.strip() in ["{", "}", '""', "..."]:
+                    msg_text = "I am at your service. Please let me know what you would like to explore."
 
                 # Safely record assistant turn in DB
                 try:

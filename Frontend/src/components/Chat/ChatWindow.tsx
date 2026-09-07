@@ -12,6 +12,40 @@ interface ChatWindowProps {
   availableModels: string[];
 }
 
+export function cleanDisplayMessage(content: string): string {
+  if (!content) return '';
+  let text = content.trim();
+
+  // If text starts with '{' or has JSON keys, extract message or strip JSON scaffolding
+  if (text.startsWith('{') && (text.includes('"message"') || text.includes('"expression"') || text.includes('"animation"'))) {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.message) text = String(parsed.message);
+      else if (parsed.content) text = String(parsed.content);
+    } catch {
+      // Malformed/unclosed JSON regex extraction
+      const match = text.match(/"(?:message|content)"\s*:\s*"((?:[^"\\]|\\.)*)/s);
+      if (match && match[1]) {
+        text = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+      } else {
+        // Strip out JSON keys and braces completely
+        text = text
+          .replace(/["']?(?:expression|animation|priority|speak)["']?\s*:\s*["']?[^,"\n\}]*["']?,?/gi, '')
+          .replace(/["']?(?:message|content|response|text)["']?\s*:\s*"?/gi, '')
+          .replace(/[{}]/g, '')
+          .trim();
+      }
+    }
+  }
+
+  // Strip cutoff disclaimers
+  text = text.replace(/as of my (?:current\s+)?knowledge cutoff[^\.\n]*[\.\n]?/gi, '');
+  text = text.replace(/my knowledge cutoff is[^\.\n]*[\.\n]?/gi, '');
+  text = text.replace(/i (?:do not|don't) have (?:access to )?real-time (?:data|information|updates)[^\.\n]*[\.\n]?/gi, '');
+
+  return text.trim() || 'I am at your service.';
+}
+
 export const ChatWindow: React.FC<ChatWindowProps> = ({
   messages,
   onSendMessage,
@@ -184,7 +218,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 )}
 
                 {/* Text Body */}
-                <div className="whitespace-pre-wrap leading-relaxed text-sm">{msg.content}</div>
+                <div className="whitespace-pre-wrap leading-relaxed text-sm">{cleanDisplayMessage(msg.content)}</div>
 
                 {/* Footer timestamp, listen button & copy */}
                 <div className="mt-2 flex items-center justify-between gap-4 text-[10px] text-slate-500">
@@ -193,12 +227,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     {!isUser && (
                       <button
                         onClick={() => {
+                          const toSpeak = cleanDisplayMessage(msg.content);
                           if (activeSpokenId === msg.id) {
                             voiceEngine.stop();
                             setActiveSpokenId(null);
                           } else {
                             setActiveSpokenId(msg.id);
-                            voiceEngine.speak(msg.content, () => setActiveSpokenId(null));
+                            voiceEngine.speak(toSpeak, () => setActiveSpokenId(null));
                           }
                         }}
                         className={`transition-colors font-mono flex items-center gap-1 ${
@@ -212,7 +247,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       </button>
                     )}
                     <button
-                      onClick={() => copyText(msg.id, msg.content)}
+                      onClick={() => copyText(msg.id, cleanDisplayMessage(msg.content))}
                       className="hover:text-slate-300 transition-colors font-mono"
                     >
                       {copiedId === msg.id ? 'Copied!' : 'Copy'}

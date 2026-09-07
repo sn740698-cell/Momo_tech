@@ -23,27 +23,95 @@ class ResponseParser:
     Parses LLM generation text into strict MomoResponse schemas.
     """
 
+    CUTOFF_PATTERNS = [
+        re.compile(r"as of my (?:current\s+)?knowledge cutoff[^\.\n]*[\.\n]?", re.IGNORECASE),
+        re.compile(r"my knowledge cutoff is[^\.\n]*[\.\n]?", re.IGNORECASE),
+        re.compile(r"i (?:do not|don't) have (?:access to )?real-time (?:data|information|updates)[^\.\n]*[\.\n]?", re.IGNORECASE),
+        re.compile(r"i cannot provide real-time (?:updates|information)[^\.\n]*[\.\n]?", re.IGNORECASE),
+        re.compile(r"as an ai (?:language )?model[^\.\n]*[\.\n]?", re.IGNORECASE),
+    ]
+
+    @classmethod
+    def strip_json_scaffolding(cls, text: str) -> str:
+        """
+        If text contains raw JSON remnants (e.g. from partial generation or malformed syntax),
+        extracts the human message value or strips the JSON scaffolding so raw JSON never leaks to chat.
+        """
+        if not text:
+            return ""
+
+        trimmed = text.strip()
+
+        # Check if text contains JSON-like structures or keys
+        if "{" in trimmed or '"message"' in trimmed or '"expression"' in trimmed or '"animation"' in trimmed:
+            # Try to regex extract content of "message" field even from truncated or unclosed JSON
+            msg_match = re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)', trimmed, re.DOTALL)
+            if not msg_match:
+                msg_match = re.search(r'"(?:content|response|text)"\s*:\s*"((?:[^"\\]|\\.)*)', trimmed, re.DOTALL)
+
+            if msg_match:
+                extracted = msg_match.group(1)
+                # Unescape common escaped characters
+                extracted = extracted.replace('\\"', '"').replace('\\n', '\n').replace('\\t', ' ')
+                # Remove any trailing unclosed quote or brace remnants
+                extracted = re.sub(r'["\}]+$', '', extracted).strip()
+                if extracted:
+                    return extracted
+
+            # If no "message": "..." match succeeded, strip all JSON key-value pairs, brackets, and braces
+            stripped = re.sub(r'["\']?(?:expression|animation|priority|speak)["\']?\s*:\s*["\']?[^,"\n\}]*["\']?,?', '', trimmed, flags=re.IGNORECASE)
+            stripped = re.sub(r'["\']?(?:message|content|response|text)["\']?\s*:\s*"?', '', stripped, flags=re.IGNORECASE)
+            stripped = stripped.replace('{', '').replace('}', '').strip()
+            stripped = re.sub(r'^["\']|["\']$', '', stripped).strip()
+            if stripped:
+                return stripped
+
+        return text
+
+    @classmethod
+    def sanitize_cutoff_disclaimers(cls, text: str) -> str:
+        """Strips artificial AI training cutoff disclaimers."""
+        if not text:
+            return ""
+        sanitized = text
+        for pat in cls.CUTOFF_PATTERNS:
+            sanitized = pat.sub("", sanitized)
+        sanitized = " ".join(sanitized.split()).strip()
+        return sanitized
+
     @classmethod
     def clean_text(cls, text: str) -> str:
-        """Strips roleplay prefixes, speaker tags, and placeholder echoes."""
-        cleaned = text.strip() if text else ""
+        """Strips roleplay prefixes, JSON scaffolding, cutoff excuses, and echoes."""
+        if not text:
+            return ""
+
+        # First, strip JSON keys/brackets if raw JSON leaked into text
+        cleaned = cls.strip_json_scaffolding(text)
+        cleaned = cleaned.strip()
+
         # Strip speaker labels like "MOMO:", "Assistant:", "AI:"
         cleaned = re.sub(r'^(?:MOMO|Assistant|AI):\s*', '', cleaned, flags=re.IGNORECASE)
         # Strip screenplay style prefixes like '"User", in a warm and helpful tone:' or 'User:'
         cleaned = re.sub(r'^["\']?User["\']?,\s*[^:]+:\s*', '', cleaned, flags=re.IGNORECASE)
         cleaned = re.sub(r'^User:\s*', '', cleaned, flags=re.IGNORECASE)
+
         # Strip placeholder echoes
         if cleaned.lower() in [
             "your direct, helpful, and accurate response to the user",
             "your conversational response in markdown text",
             "your conversational response",
             "<your response>",
-            "<your helpful and accurate response>"
+            "<your helpful and accurate response>",
+            "<your complete, articulate response here>"
         ]:
             cleaned = ""
+
         # Strip surrounding double or single quotes if wrapped
         if len(cleaned) >= 2 and ((cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'"))):
             cleaned = cleaned[1:-1].strip()
+
+        # Sanitize cutoff disclaimers
+        cleaned = cls.sanitize_cutoff_disclaimers(cleaned)
         return cleaned
 
     @classmethod
@@ -117,7 +185,25 @@ class ResponseParser:
                 except json.JSONDecodeError:
                     parsed_dict = None
 
-        # 3. If JSON parsed successfully, extract fields
+        # 2b. If valid JSON parsing failed, recover fields via regex from partial/unclosed JSON
+        if parsed_dict is None and ("{" in candidate or '"message"' in candidate):
+            msg_match = re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)', candidate, re.DOTALL)
+            if not msg_match:
+                msg_match = re.search(r'"(?:content|response|text)"\s*:\s*"((?:[^"\\]|\\.)*)', candidate, re.DOTALL)
+
+            expr_match = re.search(r'"expression"\s*:\s*"([^"]+)"', candidate, re.IGNORECASE)
+            anim_match = re.search(r'"animation"\s*:\s*"([^"]+)"', candidate, re.IGNORECASE)
+
+            if msg_match:
+                extracted_msg = msg_match.group(1).replace('\\"', '"').replace('\\n', '\n').strip()
+                extracted_msg = re.sub(r'["\}]+$', '', extracted_msg).strip()
+                parsed_dict = {
+                    "message": extracted_msg,
+                    "expression": expr_match.group(1) if expr_match else "normal",
+                    "animation": anim_match.group(1) if anim_match else "none"
+                }
+
+        # 3. If JSON parsed or recovered successfully, extract fields
         if isinstance(parsed_dict, dict):
             raw_msg = parsed_dict.get("message", "")
             if not raw_msg and "content" in parsed_dict:
@@ -146,6 +232,9 @@ class ResponseParser:
         # 4. Fallback: LLM replied with plain text without JSON wrapper
         # Extract plain message, infer expression from keywords
         plain_msg = cls.clean_text(cleaned)
+        if not plain_msg or plain_msg.strip() in ["{", "}", '""', "...", ""]:
+            plain_msg = "I am at your service. Please let me know how I can assist you."
+
         inferred_expr = "normal"
         inferred_anim = "none"
 
@@ -162,7 +251,7 @@ class ResponseParser:
             inferred_anim = "tilt_left"
 
         return MomoResponse(
-            message=plain_msg if plain_msg else "I am here.",
+            message=plain_msg,
             expression=inferred_expr,
             animation=inferred_anim,
             speak=True,

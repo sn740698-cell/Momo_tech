@@ -14,6 +14,8 @@ from ai.prompt_builder import PromptBuilder
 from ai.response_parser import ResponseParser
 from brain.personality import EXPRESSION_ASCII
 from security.permissions import PermissionManager
+from ai_workflow.services.temporal_service import TemporalService
+from ai_workflow.services.web_crawler_service import LiveWebCrawlerService
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,26 @@ class ConversationAgent:
                     f"[Verified Invoice {f.invoice_number}]: Total {f.currency} {f.invoice_total}, "
                     f"Paid {f.amount_paid}, Balance Due {f.balance_due}, Due Date {f.due_date}, Status {f.payment_status}"
                 )
+
+        # Check for real-time temporal and web search intent
+        temporal_intent = TemporalService.analyze_temporal_intent(last_user_msg)
+        if temporal_intent.get("needs_web_search") and not temporal_intent.get("is_date_query"):
+            try:
+                crawler = LiveWebCrawlerService(timeout_seconds=4.0)
+                clean_q = last_user_msg.replace("what happened with", "").replace("what happened", "").strip()
+                live_items = await crawler.gather_realtime_context(
+                    query=clean_q,
+                    target_date=temporal_intent.get("target_date"),
+                    target_label=temporal_intent.get("target_label"),
+                    max_results=3
+                )
+                for item in live_items:
+                    context_snippets.append(
+                        f"[Live Verified News ({item.get('source')} - {item.get('pub_date')})]: "
+                        f"{item.get('title')}. {item.get('snippet')}"
+                    )
+            except Exception as e:
+                logger.warning(f"Could not retrieve live news context for conversation: {e}")
 
         combined_context = "\n".join(context_snippets) if context_snippets else None
 
@@ -108,6 +130,39 @@ class ConversationAgent:
             raw_content = llm_result.get("content", "")
             thinking = llm_result.get("thinking", "")
             parsed_response = ResponseParser.parse(raw_content, thinking, active_model)
+
+            # Strict guard against knowledge cutoff disclaimers and JSON leaks
+            msg_lower = parsed_response.message.lower()
+            is_refusal = any(
+                phrase in msg_lower for phrase in [
+                    "knowledge cutoff",
+                    "as of my current",
+                    "as of my knowledge",
+                    "real-time",
+                    "as an ai",
+                    "cannot provide real-time",
+                    "don't have access",
+                    "do not have access",
+                ]
+            )
+
+            # If the LLM refused with a cutoff excuse or output was blank on a real-time query, intercept it!
+            if is_refusal or not parsed_response.message or parsed_response.message.strip() in ["...", "I am here.", ""]:
+                if temporal_intent.get("is_date_query") and temporal_intent.get("direct_answer"):
+                    parsed_response.message = temporal_intent["direct_answer"]
+                    parsed_response.expression = "happy"
+                elif context_snippets:
+                    live_news_lines = [s for s in context_snippets if "[Live Verified News" in s]
+                    if live_news_lines:
+                        target_lbl = temporal_intent.get("target_label", "the requested date")
+                        parsed_response.message = (
+                            f"Here are the verified updates regarding {target_lbl}:\n\n" +
+                            "\n\n".join([s.replace("[Live Verified News", "• [Report") for s in live_news_lines[:3]])
+                        )
+                        parsed_response.expression = "normal"
+
+            # Final defense against any lingering JSON brackets
+            parsed_response.message = ResponseParser.clean_text(parsed_response.message)
         else:
             # Graceful degraded response when Ollama is unreachable
             err = str(llm_result.get("error", "Local LLM service unavailable."))

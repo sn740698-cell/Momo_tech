@@ -11,6 +11,7 @@ from ai_workflow.state import WorkflowState
 from ai_workflow.agents.context_agent import ContextAgent
 from ai_workflow.agents.decomposition_agent import DecompositionAgent
 from ai_workflow.agents.rag_agent import RAGAgent
+from ai_workflow.agents.web_search_agent import TemporalWebSearchAgent
 from ai_workflow.agents.risk_agent import RiskAgent
 from ai_workflow.agents.planning_agent import PlanningAgent
 from ai_workflow.agents.solver_primary import PrimarySolverAgent
@@ -112,6 +113,7 @@ def create_ai_workflow_graph():
     context_agent = ContextAgent()
     decomp_agent = DecompositionAgent()
     rag_agent = RAGAgent()
+    web_agent = TemporalWebSearchAgent()
     risk_agent = RiskAgent()
     plan_agent = PlanningAgent()
     solver_a = PrimarySolverAgent()
@@ -122,6 +124,7 @@ def create_ai_workflow_graph():
     workflow.add_node("init_context", context_agent.run)
     workflow.add_node("decompose", decomp_agent.run)
     workflow.add_node("retrieve_rag", rag_agent.run)
+    workflow.add_node("retrieve_web", web_agent.run)
     workflow.add_node("analyze_risks", risk_agent.run)
     workflow.add_node("plan", plan_agent.run)
     workflow.add_node("solver_primary", solver_a.run)
@@ -146,12 +149,14 @@ def create_ai_workflow_graph():
         }
     )
 
-    # Fan-out from Decomposition to RAG and Risk analysis
+    # Fan-out from Decomposition to RAG, Web Search, and Risk analysis
     workflow.add_edge("decompose", "retrieve_rag")
+    workflow.add_edge("decompose", "retrieve_web")
     workflow.add_edge("decompose", "analyze_risks")
 
-    # Fan-in from RAG and Risk to Planner
+    # Fan-in from RAG, Web Search, and Risk to Planner
     workflow.add_edge("retrieve_rag", "plan")
+    workflow.add_edge("retrieve_web", "plan")
     workflow.add_edge("analyze_risks", "plan")
 
     # Fan-out from Planner to Solver A and Solver B

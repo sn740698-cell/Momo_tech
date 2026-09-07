@@ -21,9 +21,18 @@ MOMO is a production-quality, modular, local-first AI platform that combines an 
   - **Communication Supervisor**: Deterministic balance-due message drafting via the Texting Agent.
   - **Voice Supervisor**: Local Whisper STT and Piper TTS interfaces.
 - **Multi-Agent RAG & Workflow Subsystem (`Backend/ai_workflow`)**:
-  - **8 Specialized Agents**: Context, Decomposition, Isolated RAG, Risk & Constraint, Planning, Primary Solver (A), Secondary Solver (B), and Evaluator / Judge.
-  - **LangGraph Parallel Execution**: Parallel solver branches with synchronized fan-in and structured Pydantic evaluation.
+  - **9 Specialized Agents (MoA Architecture)**: Context, Decomposition, Isolated RAG, Temporal Web Search, Risk & Constraint, Planning, Primary Solver (A), Secondary Solver (B), and Evaluator / Judge.
+  - **Mixture of Agents (MoA) Parallel Execution**: Parallel solver branches with synchronized fan-in and structured Pydantic evaluation.
+  - **Real-Time Web Search & Deep Article Crawler**:
+    - Zero-cost live news retrieval via Google News RSS (with exact `pubDate` timestamps, official sources like Press Information Bureau, LiveLaw, and national press) and DuckDuckGo fallback.
+    - Focused asynchronous `httpx` article text extraction with HTML noise stripping.
+  - **Deterministic Temporal Grounding**:
+    - Calculates calendar math deterministically (`today`, `yesterday`, `tomorrow`, day of week, timezone `Asia/Kolkata`).
+    - Resolves queries like *"what happened yesterday?"* to exact date boundaries without LLM hallucinations.
+    - Built-in calendar registry of national and international observances for instant answers to *"what special today is?"*.
   - **Anti-Hallucination & Conditional Retry Loop**: Deterministic critique feedback, bounded confidence (`0.0 - 1.0`), and strict zero-citation fabrications.
+  - **Anti-JSON Leakage & Cutoff Disclaimer Defense**:
+    - Multi-layer shield across System Prompts, Parsers, Agents, and Frontend UI preventing raw JSON brackets or AI knowledge cutoff excuses from ever entering the chat.
   - **Tenant & Project Isolation**: Partitioned vector search and execution history with zero cross-tenant leakage.
   - **Deterministic Mock Mode**: Full offline execution path via `AI_MOCK_MODE=true` without external API credentials.
 - **Deterministic Financial Safety**:
@@ -53,19 +62,19 @@ This will:
 ```text
 momo/
 ├── Backend/
-│   ├── ai_workflow/     # Multi-Agent RAG/Workflow subsystem (Agents, State, LangGraph, LLM/Embedding Factory)
+│   ├── ai_workflow/     # Multi-Agent MoA Subsystem (9 Agents, Web Search & Crawler, Temporal Service, LangGraph)
 │   ├── api/             # Django REST Framework endpoints & serializers (/api/workflow/...)
 │   ├── graph/           # Physical Companion MomoState, merge reducers, and LangGraph workflow
 │   ├── supervisors/     # Root, Conversation, Finance, Communication, Voice
 │   ├── agents/          # Specialized companion agents (Conversation, Texting, Retrieval, DataAnalyzer, etc.)
-│   ├── ai/              # Resilient OllamaClient, ModelManager, GPUManager (OOM recovery)
+│   ├── ai/              # Resilient OllamaClient, ModelManager, GPUManager (OOM recovery), ResponseParser
 │   ├── nlp/             # BERT contextual analysis & DistilBERT embeddings
 │   ├── retrieval/       # ChromaDB vector collection and semantic query filters
 │   ├── documents/       # Parser, Chunker, and DocumentProcessor
 │   ├── finance/         # Deterministic Calculator, Validator, and Extractor
 │   ├── iot/             # USB-C SerialBridge, DeviceRegistry, Heartbeat, and Protocol
 │   ├── security/        # Privacy permission toggles & hardware command allowlists
-│   └── tests/           # Full unit and failure test suite (52 passing tests)
+│   └── tests/           # Full unit and integration test suite (Temporal, Crawler, MoA, Workflow, State)
 ├── Frontend/
 │   ├── src/
 │   │   ├── components/  # MomoAvatar, ChatWindow, DocumentUploader, InvoiceCard, Esp32Card, etc.

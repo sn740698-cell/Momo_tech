@@ -28,13 +28,27 @@ class EvaluatorAgent(BaseWorkflowAgent):
     async def execute(self, state: WorkflowState) -> Dict[str, Any]:
         provider = LLMFactory.get_provider(role="evaluator")
 
+        temporal_summary = ""
+        if state.temporal_anchor:
+            ta = state.temporal_anchor
+            temporal_summary = (
+                f"[SYSTEM TEMPORAL ANCHOR]:\n"
+                f"- Today: {ta.get('today_readable')} ({ta.get('today_day')})\n"
+                f"- Yesterday: {ta.get('yesterday_readable')} ({ta.get('yesterday_day')})\n"
+                f"- Current Time: {ta.get('current_time_readable')} ({ta.get('timezone')})\n"
+            )
+            if ta.get("special_today"):
+                temporal_summary += f"- Today's Observance: {ta.get('special_today')}\n"
+            temporal_summary += "\n"
+
         if state.no_context_found or not state.retrieved_context:
-            evidence_summary = "NO_RELEVANT_CONTEXT_FOUND. Solvers must NOT fabricate facts or cite unretrieved documents."
+            evidence_summary = temporal_summary + "NO_RELEVANT_CONTEXT_FOUND. Solvers must NOT fabricate facts or cite unretrieved documents."
         else:
-            evidence_summary = "\n".join([
+            evidence_lines = [
                 f"- [Doc: {e.document_id} | Chunk {e.chunk_index}]: {e.content}"
                 for e in state.retrieved_context
-            ])
+            ]
+            evidence_summary = temporal_summary + "\n".join(evidence_lines)
 
         constraints_summary = "\n".join(state.constraints) if state.constraints else "None specified"
 

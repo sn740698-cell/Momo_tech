@@ -111,7 +111,11 @@ class WorkflowState(BaseModel):
 
     subtasks: List[SubTask] = Field(default_factory=list)
     retrieved_context: Annotated[List[EvidenceItem], merge_evidence] = Field(default_factory=list)
+    live_web_context: Annotated[List[EvidenceItem], merge_evidence] = Field(default_factory=list)
     no_context_found: bool = False
+
+    temporal_anchor: Dict[str, Any] = Field(default_factory=dict)
+    is_realtime_query: bool = False
 
     risks: List[RiskItem] = Field(default_factory=list)
     constraints: List[str] = Field(default_factory=list)

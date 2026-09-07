@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from brain.personality import BASE_SYSTEM_PROMPT
+from ai_workflow.services.temporal_service import TemporalService
 
 
 class PromptBuilder:
@@ -9,7 +10,8 @@ class PromptBuilder:
     1. MOMO Persona & JSON Schema contract
     2. User Identity & Long-Term Memories
     3. Live Session & Context Telemetry (Active app, idle time, session length)
-    4. Multi-turn Chat History
+    4. Deterministic Temporal Anchor (Date, Day, Yesterday, Observances, Timezone)
+    5. Multi-turn Chat History
     """
 
     @classmethod
@@ -24,11 +26,15 @@ class PromptBuilder:
     ) -> str:
         prompt_parts = [BASE_SYSTEM_PROMPT]
 
-        # Contextual metadata block (background environment telemetry)
-        now = datetime.now()
+        # Deterministic Temporal & Environmental Grounding
+        anchor = TemporalService.get_temporal_anchor()
         context_block = [
-            f"- Current Time: {now.strftime('%Y-%m-%d %H:%M')}",
+            f"- Current Date & Day: {anchor['today_day']}, {anchor['today_readable']} ({anchor['today_date']})",
+            f"- Current Time: {anchor['current_time_readable']} ({anchor['timezone']})",
+            f"- Yesterday Was: {anchor['yesterday_day']}, {anchor['yesterday_readable']} ({anchor['yesterday_date']})",
         ]
+        if anchor.get("special_today"):
+            context_block.append(f"- Today's Observance: {anchor['special_today']}")
         if user_name and user_name.lower() not in ["user", "unknown", ""]:
             context_block.append(f"- User Name: {user_name}")
         if active_app:

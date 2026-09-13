@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChatMessage, MomoExpression, MomoAnimation } from '../../types/momo';
-import { momoSocket } from '../../services/websocket';
+import { ChatMessage } from '../../types/momo';
 import { voiceEngine } from '../../services/voice';
 
 interface ChatWindowProps {
@@ -31,7 +30,7 @@ export function cleanDisplayMessage(content: string): string {
       } else {
         // Strip out JSON keys and braces completely
         text = text
-          .replace(/["']?(?:expression|animation|priority|speak)["']?\s*:\s*["']?[^,"\n\}]*["']?,?/gi, '')
+          .replace(/["']?(?:expression|animation|priority|speak)["']?\s*:\s*["']?[^,"\n}]*["']?,?/gi, '')
           .replace(/["']?(?:message|content|response|text)["']?\s*:\s*"?/gi, '')
           .replace(/[{}]/g, '')
           .trim();
@@ -40,9 +39,9 @@ export function cleanDisplayMessage(content: string): string {
   }
 
   // Strip cutoff disclaimers
-  text = text.replace(/as of my (?:current\s+)?knowledge cutoff[^\.\n]*[\.\n]?/gi, '');
-  text = text.replace(/my knowledge cutoff is[^\.\n]*[\.\n]?/gi, '');
-  text = text.replace(/i (?:do not|don't) have (?:access to )?real-time (?:data|information|updates)[^\.\n]*[\.\n]?/gi, '');
+  text = text.replace(/as of my (?:current\s+)?knowledge cutoff[.\n]*[.\n]?/gi, '');
+  text = text.replace(/my knowledge cutoff is[.\n]*[.\n]?/gi, '');
+  text = text.replace(/i (?:do not|don't) have (?:access to )?real-time (?:data|information|updates)[.\n]*[.\n]?/gi, '');
 
   return text.trim() || 'I am at your service.';
 }

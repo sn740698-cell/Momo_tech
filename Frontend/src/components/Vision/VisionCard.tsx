@@ -18,6 +18,7 @@ export const VisionCard: React.FC<VisionCardProps> = ({
   const [showLivePreview, setShowLivePreview] = useState<boolean>(true);
   const [streamMode, setStreamMode] = useState<'snapshot' | 'mjpeg'>('snapshot');
   const [snapshotSrc, setSnapshotSrc] = useState<string>('');
+  const [streamError, setStreamError] = useState<boolean>(false);
   const [scanning, setScanning] = useState(false);
   const activeBlobUrlRef = React.useRef<string | null>(null);
 

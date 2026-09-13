@@ -53,6 +53,7 @@ export function App() {
 
   // Safety refs for chat turn tracking
   const currentPendingTurnRef = useRef<string | null>(null);
+  const fallbackTimerRef = useRef<any>(null);
 
   // Chat History
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -70,6 +71,10 @@ export function App() {
   const handleAssistantTurn = (payload: any) => {
     setIsThinking(false);
     currentPendingTurnRef.current = null;
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
 
     if (payload.expression) setExpression(payload.expression);
     if (payload.animation) setAnimation(payload.animation);
@@ -217,7 +222,7 @@ export function App() {
     }
 
     // Fallback: If socket sent but no response arrives within 6 seconds, trigger REST
-    const fallbackTimer = setTimeout(async () => {
+    fallbackTimerRef.current = setTimeout(async () => {
       if (currentPendingTurnRef.current === turnId) {
         console.warn("[MOMO-WS] Response timeout on WebSocket, falling back to REST /api/chat/");
         try {

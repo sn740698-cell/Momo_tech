@@ -26,7 +26,13 @@ class MemoryManager:
         re.compile(r"(?:i hate|i dislike|i don't like)\s+([^.,!]+)", re.IGNORECASE),
     ]
     PROJECT_PATTERNS = [
-        re.compile(r"(?:i am working on|i'm building|my project is)\s+([^.,!]+)", re.IGNORECASE),
+        re.compile(r"(?:i am working on|i'm building|my project is|my project name is)\s+([^.,!]+)", re.IGNORECASE),
+    ]
+    REINFORCEMENT_PATTERNS = [
+        re.compile(r"(?:remember\s+that|learn\s+that|note\s+that|keep\s+in\s+mind\s+that|always\s+remember)\s+([^.!?]+)", re.IGNORECASE),
+        re.compile(r"(?:from\s+now\s+on|in\s+the\s+future|going\s+forward)\s*,?\s*([^.!?]+)", re.IGNORECASE),
+        re.compile(r"(?:my\s+(?:project\s+name|favorite|favourite|preferred|hobby|email|contact)\s+(?:is|language|framework|tool)?)\s+([^.!?]+)", re.IGNORECASE),
+        re.compile(r"(?:i\s+prefer|i\s+want\s+you\s+to\s+always|always\s+use|never\s+use)\s+([^.!?]+)", re.IGNORECASE),
     ]
 
     def __init__(self):
@@ -183,5 +189,51 @@ class MemoryManager:
                     await sync_to_async(self.repo.add_fact)(
                         content=f"User preference: {match.group(0).strip()}",
                         fact_type="preference",
-                        confidence=0.80
+                        confidence=0.85
                     )
+
+        # Check for reinforcement learning directives and rules taught by user
+        for pat in self.REINFORCEMENT_PATTERNS:
+            match = pat.search(text)
+            if match:
+                rule_text = match.group(1).strip()
+                if len(rule_text) > 3:
+                    full_rule = f"Learned rule: {match.group(0).strip()}"
+                    await sync_to_async(self.repo.add_fact)(
+                        content=full_rule,
+                        fact_type="rule",
+                        confidence=1.0,
+                        source="reinforcement_learning"
+                    )
+                    try:
+                        await sync_to_async(self.chroma_memory.index_saved_memory)(
+                            memory_text=full_rule
+                        )
+                    except Exception as e:
+                        logger.debug(f"Chroma indexing of reinforced rule skipped: {e}")
+
+    async def get_active_reinforced_rules(self, limit: int = 5) -> List[str]:
+        """
+        Retrieves active rules and learned facts to condition the model's response.
+        """
+        facts = await sync_to_async(self.repo.search_facts)(fact_type="rule", limit=limit)
+        if not facts:
+            facts = await sync_to_async(self.repo.search_facts)(limit=limit)
+        return [f['content'] for f in facts]
+
+    async def clear_session_memory(self, session_id: str = "default") -> Dict[str, int]:
+        """
+        Purges both SQLite chat records and ChromaDB vector documents for the specified session.
+        """
+        db_cleared = await sync_to_async(self.repo.clear_session_chat)(session_id=session_id)
+        try:
+            vector_cleared = await sync_to_async(self.chroma_memory.clear_session_chats)(session_id=session_id)
+        except Exception as e:
+            logger.warning(f"Failed to clear vector session chats: {e}")
+            vector_cleared = 0
+
+        logger.info(f"Session memory cleared for '{session_id}': {db_cleared} db records, {vector_cleared} vector items.")
+        return {
+            "db_messages_deleted": db_cleared,
+            "vector_chats_deleted": vector_cleared
+        }

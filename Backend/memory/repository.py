@@ -65,14 +65,24 @@ class MemoryRepository:
         qs = FactMemory.objects.all()
         if fact_type:
             qs = qs.filter(fact_type=fact_type)
+        STOPWORDS = {
+            "what", "when", "where", "which", "who", "whom", "whose", "why", "how",
+            "can", "could", "would", "should", "will", "tell", "about", "the", "and",
+            "for", "with", "this", "that", "from", "have", "has", "had", "you", "your",
+            "are", "was", "were", "momo", "please", "more", "him", "her", "them", "did"
+        }
         if query:
-            keywords = query.strip().split()
+            keywords = [k.lower().strip() for k in query.strip().split()]
             q_filter = Q()
+            valid_kw = False
             for kw in keywords:
-                if len(kw) > 2:
+                if len(kw) > 2 and kw not in STOPWORDS:
                     q_filter |= Q(content__icontains=kw)
-            if q_filter:
+                    valid_kw = True
+            if valid_kw:
                 qs = qs.filter(q_filter)
+            else:
+                return []
         return [
             {
                 "id": f.id,

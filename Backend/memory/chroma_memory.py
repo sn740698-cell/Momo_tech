@@ -270,3 +270,28 @@ class ChromaMemoryService:
                 })
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:top_k]
+
+    def clear_session_chats(self, session_id: str = "default") -> int:
+        """
+        Deletes all vector indexed chat interactions for the specified session_id.
+        """
+        self._init_chroma()
+        deleted = 0
+        if self.chat_collection is not None:
+            try:
+                res = self.chat_collection.get(where={"session_id": session_id})
+                ids_to_del = res.get("ids", [])
+                if ids_to_del:
+                    self.chat_collection.delete(ids=ids_to_del)
+                    deleted += len(ids_to_del)
+                    logger.info(f"Deleted {deleted} vector chat interactions for session '{session_id}' from ChromaDB.")
+            except Exception as e:
+                logger.warning(f"Error clearing ChromaDB session chats: {e}")
+
+        # Also remove from in-memory fallback
+        keys_to_del = [k for k, v in self._in_memory_chats.items() if v.get("metadata", {}).get("session_id") == session_id]
+        for k in keys_to_del:
+            del self._in_memory_chats[k]
+            deleted += 1
+
+        return deleted

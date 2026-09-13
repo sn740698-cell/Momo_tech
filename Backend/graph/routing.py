@@ -6,7 +6,11 @@ from graph.state import MomoState
 
 def route_from_root(state: MomoState) -> str:
     route = state.current_route or "conversation"
-    if route == "finance":
+    if route == "automation":
+        return "automation_supervisor"
+    elif route == "research":
+        return "research_supervisor"
+    elif route == "finance":
         return "finance_supervisor"
     elif route == "communication":
         return "communication_supervisor"

@@ -10,7 +10,8 @@ class MomoWebSocketClient {
 
   constructor() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.port === '5173' ? '127.0.0.1:8000' : window.location.host;
+    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const host = isDev ? '127.0.0.1:8000' : window.location.host;
     this.url = `${protocol}//${host}/ws/momo/`;
   }
 
@@ -81,12 +82,16 @@ class MomoWebSocketClient {
     }
   }
 
+  public isOpen(): boolean {
+    return Boolean(this.ws && this.ws.readyState === WebSocket.OPEN);
+  }
+
   public send(payload: any) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(payload));
+    if (this.isOpen()) {
+      this.ws!.send(JSON.stringify(payload));
       return true;
     }
-    console.warn('[MOMO-WS] Cannot send, socket not open');
+    console.warn('[MOMO-WS] Cannot send, socket not open (readyState=' + this.ws?.readyState + ')');
     return false;
   }
 

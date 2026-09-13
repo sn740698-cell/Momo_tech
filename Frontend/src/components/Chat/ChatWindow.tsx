@@ -6,6 +6,7 @@ import { voiceEngine } from '../../services/voice';
 interface ChatWindowProps {
   messages: ChatMessage[];
   onSendMessage: (text: string) => void;
+  onClearChat?: () => void;
   isThinking: boolean;
   selectedModel: string;
   onModelChange: (model: string) => void;
@@ -49,6 +50,7 @@ export function cleanDisplayMessage(content: string): string {
 export const ChatWindow: React.FC<ChatWindowProps> = ({
   messages,
   onSendMessage,
+  onClearChat,
   isThinking,
   selectedModel,
   onModelChange,
@@ -69,9 +71,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     return unsub;
   }, []);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isThinking]);
+  // Removed auto-scroll on send/isThinking per user requirement: viewport remains steady when sending messages
 
   const handleSend = () => {
     if (!input.trim() || isThinking) return;
@@ -117,8 +117,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <span className="text-sm font-semibold text-slate-200">MOMO Conversation</span>
         </div>
 
-        {/* Controls: Voice & Model Selector */}
-        <div className="flex items-center gap-3">
+        {/* Controls: Clear, Voice & Model Selector */}
+        <div className="flex items-center gap-2.5">
+          {onClearChat && (
+            <button
+              onClick={onClearChat}
+              title="Clear conversation history & reset memory"
+              className="px-2.5 py-1 rounded-lg text-xs font-mono flex items-center gap-1 border border-rose-900/60 bg-rose-950/40 text-rose-300 hover:bg-rose-900/50 hover:border-rose-700 transition-all active:scale-98"
+            >
+              <span>🗑️ Clear</span>
+            </button>
+          )}
+
           <button
             onClick={() => setVoiceEnabled(voiceEngine.toggleVoice())}
             title={voiceEnabled ? "Mute Voice Output" : "Enable Voice Output"}

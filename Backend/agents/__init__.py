@@ -6,3 +6,9 @@ from .data_analyzer_agent import DataAnalyzerAgent
 from .texting_agent import TextingAgent
 from .stt_agent import STTAgent
 from .tts_agent import TTSAgent
+from .automation_agent import AutomationAgent
+from .web_crawl_agent import WebCrawlAgent
+from .relevance_analyzer_agent import RelevanceAnalyzerAgent
+from .search_scout_agent import SearchScoutAgent
+from .deep_scraper_agent import DeepScraperAgent
+from .fact_verifier_agent import FactVerifierAgent

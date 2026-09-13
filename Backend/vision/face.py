@@ -1,19 +1,17 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+import numpy as np
+from .expression_detector import ExpressionDetector
 
 
 class FaceDetector:
     """
-    Lightweight face & presence detector interface.
-    Gracefully falls back to mock telemetry if OpenCV/MediaPipe is not installed.
+    OpenCV face & expression detector interface for MOMO.
     """
 
-    def __init__(self):
-        self.face_present: bool = True
-        self.face_count: int = 1
+    def __init__(self, detector: Optional[ExpressionDetector] = None):
+        self.detector = detector or ExpressionDetector()
 
-    def detect(self, frame=None) -> Dict[str, Any]:
-        return {
-            "face_detected": self.face_present,
-            "face_count": self.face_count,
-            "confidence": 0.95 if self.face_present else 0.0,
-        }
+    def detect(self, frame: Optional[np.ndarray] = None) -> Dict[str, Any]:
+        if frame is not None:
+            return self.detector.analyze_frame(frame)
+        return self.detector.get_last_analysis()

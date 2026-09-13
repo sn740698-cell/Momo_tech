@@ -105,7 +105,7 @@ class MomoResponse(BaseModel):
     animation: str = "none"
     speak: bool = True
     priority: str = "normal"
-    ascii: str = "◕ᴗ◕"
+    ascii: str = "^_^"
     thinking: Optional[str] = None
     model: Optional[str] = None
     timestamp: float = Field(default_factory=time.time)
@@ -133,6 +133,13 @@ class VisionState(BaseModel):
     head_orientation: str = "center"  # 'center', 'left', 'right', 'down'
     attention_state: str = "screen"   # 'screen', 'away', 'idle'
     confidence: float = 0.0
+    emotion: str = "neutral"          # 'happy', 'sad', 'excited', 'tired', 'stressed', 'neutral'
+    emotion_confidence: float = 0.0
+    looking_at_camera: bool = False   # True when user looks at display/camera
+    work_duration_minutes: float = 0.0
+    fatigue_detected: bool = False
+    proactive_trigger: Optional[str] = None
+    expression_summary: Optional[str] = None
 
 
 class UserContext(BaseModel):

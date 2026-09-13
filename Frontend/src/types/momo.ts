@@ -10,7 +10,50 @@ export type MomoExpression =
   | 'surprised'
   | 'proud'
   | 'embarrassed'
-  | 'playful';
+  | 'playful'
+  | 'tired'
+  | 'stressed';
+
+export interface VisionTelemetry {
+  camera_available: boolean;
+  privacy_blocked: boolean;
+  face_detected: boolean;
+  face_count: number;
+  emotion: string;
+  emotion_confidence: number;
+  looking_at_camera: boolean;
+  head_pose: string;
+  work_duration_minutes: number;
+  sad_tired_minutes?: number;
+  is_sad_and_tired?: boolean;
+  fatigue_detected: boolean;
+  proactive_event?: {
+    trigger: string;
+    message: string;
+    suggested_expression: string;
+    suggested_animation: string;
+    work_minutes: number;
+    sad_tired_minutes?: number;
+  } | null;
+  sensors?: Record<string, number>;
+  expression_summary?: string;
+  recognized_user?: string;
+  recognition_confidence?: number;
+  recognition?: {
+    recognized: boolean;
+    user_name: string;
+    confidence: number;
+    status: string;
+  };
+  enhancement?: {
+    clarity_boosted: boolean;
+    upscaled: boolean;
+    laplacian_var: number;
+  };
+  clarity_score?: number;
+  enhancement_active?: boolean;
+  timestamp?: number;
+}
 
 export type MomoAnimation =
   | 'none'

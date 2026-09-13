@@ -18,6 +18,7 @@ urlpatterns = [
     path('ollama/status/', views.ollama_status, name='ollama_status'),
     path('ollama/models/', views.ollama_models, name='ollama_models'),
     path('chat/', views.api_chat, name='api_chat'),
+    path('chat/clear/', views.api_chat_clear, name='api_chat_clear'),
     path('message/', views.api_message, name='api_message'),
     
     # Documents & Finance
@@ -31,6 +32,21 @@ urlpatterns = [
     # Text-to-Speech (TTS) endpoints
     path('tts/', views.api_tts, name='api_tts'),
     path('tts/voices/', views.api_tts_voices, name='api_tts_voices'),
+
+    # Vision & Emotion Perception endpoints
+    path('vision/status/', views.vision_status, name='vision_status'),
+    path('vision/capture/', views.vision_capture, name='vision_capture'),
+    path('vision/stream/', views.vision_stream, name='vision_stream'),
+    path('vision/preview/', views.vision_preview, name='vision_preview'),
+
+    # Desktop Automation & Mindful Game Break endpoints
+    path('automation/launch_game/', views.automation_launch_game, name='automation_launch_game'),
+    path('automation/motivate/', views.automation_motivate, name='automation_motivate'),
+    path('automation/games/', views.automation_games_list, name='automation_games_list'),
+
+    # Web Crawler & Real-Time Intelligence endpoints
+    path('crawler/crawl/', views.api_crawl_url, name='api_crawl_url'),
+    path('crawler/search/', views.api_crawl_search, name='api_crawl_search'),
 
     # Multi-Agent AI Workflow endpoints
     path('workflow/execute/', views.workflow_execute, name='workflow_execute'),

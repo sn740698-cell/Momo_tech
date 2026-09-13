@@ -44,6 +44,7 @@ CALENDAR_OBSERVANCES = {
     (9, 5): "National Teachers' Day (Dr. S. Radhakrishnan Jayanti)",
     (9, 7): "International Day of Clean Air for blue skies",
     (9, 8): "International Literacy Day",
+    (9, 13): "International Programmers' Day (256th Day of the Year)",
     (9, 14): "Hindi Diwas",
     (9, 15): "Engineers' Day (M. Visvesvaraya Jayanti) / International Day of Democracy",
     (9, 16): "World Ozone Day",
@@ -164,16 +165,17 @@ class TemporalService:
             }
 
         # Yesterday questions
-        if "yesterday" in q_lower or "last night" in q_lower:
+        if ("yesterday" in q_lower or "last night" in q_lower) and any(w in q_lower for w in ["news", "what happened", "events", "headline", "update", "happening", "did"]):
             is_realtime = True
             target_date = anchor["yesterday_date"]
             target_label = "yesterday"
-            reason = "query references yesterday"
+            reason = "query references yesterday news/events"
 
-        # Today / Breaking news / Now questions
+        # Today / Breaking news / Now questions (must be news/event oriented, not casual greeting)
         elif any(k in q_lower for k in [
-            "today", "happening now", "latest news", "breaking news", "current news",
-            "recent updates", "what happened", "indian government", "cabinet decision"
+            "happening now", "latest news", "breaking news", "current news",
+            "recent updates", "what happened", "indian government", "cabinet decision",
+            "news today", "events today", "happening today", "headlines today", "updates today", "what's new today"
         ]):
             is_realtime = True
             target_date = anchor["today_date"]

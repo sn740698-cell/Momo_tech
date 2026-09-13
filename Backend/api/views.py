@@ -309,7 +309,11 @@ def api_message(request):
 
 @csrf_exempt
 def api_chat(request):
-    # Delegate to Ollama or graph
+    """
+    REST chat endpoint matching WebSocket response schema.
+    Provides instant fallback when WebSocket is reconnecting or down.
+    POST /api/chat/
+    """
     if request.method != "POST":
         return JsonResponse({"error": "POST method required"}, status=405)
     try:
@@ -320,13 +324,152 @@ def api_chat(request):
     except Exception:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    # Invoke synchronous or streaming Ollama
-    res = ollama_client.chat_sync(
-        messages=[{"role": "user", "content": msg}],
-        model=body.get("model", "hf.co/hugging-quants/Llama-3.2-1B-Instruct-Q8_0-GGUF:Q8_0"),
-        temperature=body.get("temperature", 0.7)
+    if not msg:
+        return JsonResponse({"error": "Message is required"}, status=400)
+
+    # Ingest live vision & emotion telemetry
+    from vision import get_proactive_monitor
+    monitor = get_proactive_monitor()
+    telemetry = monitor.get_latest_telemetry()
+
+    import asyncio
+    from agents.conversation_agent import ConversationAgent
+    from graph.state import MomoState, Message, VisionState
+
+    vis_obj = VisionState(
+        camera_available=telemetry.get("camera_available", False),
+        privacy_shutter_closed=telemetry.get("privacy_blocked", True),
+        person_present=telemetry.get("face_detected", False),
+        face_detected=telemetry.get("face_detected", False),
+        emotion=telemetry.get("emotion", "neutral"),
+        emotion_confidence=telemetry.get("emotion_confidence", 0.0),
+        looking_at_camera=telemetry.get("looking_at_camera", False),
+        work_duration_minutes=telemetry.get("work_duration_minutes", 0.0),
+        fatigue_detected=telemetry.get("fatigue_detected", False),
     )
-    return JsonResponse(res)
+
+    # Load prior conversation history for context
+    from graph.graph import momo_graph
+    from memory.repository import MemoryRepository
+
+    session_id = body.get("session_id", "default")
+    mem_repo = MemoryRepository()
+
+    history_turns = []
+    try:
+        recent = mem_repo.get_recent_chat(session_id=session_id, limit=6)
+        for h in recent:
+            if h.get("content"):
+                history_turns.append(Message(
+                    role=h.get("role", "user"),
+                    content=h.get("content", ""),
+                    expression=h.get("expression", "normal"),
+                    animation=h.get("animation", "none")
+                ))
+    except Exception as e:
+        logger.warning(f"Error loading chat history in api_chat: {e}")
+
+    # Record current user turn
+    try:
+        mem_repo.record_message(role="user", content=msg, session_id=session_id)
+    except Exception as e:
+        logger.warning(f"Error recording user turn in api_chat: {e}")
+
+    # Append current user message as final active turn
+    history_turns.append(Message(role="user", content=msg))
+
+    state = MomoState(
+        messages=history_turns,
+        vision_state=vis_obj,
+        metadata={"requested_model": body.get("model")}
+    )
+
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            res = loop.run_until_complete(asyncio.wait_for(momo_graph.ainvoke(state), timeout=45.0))
+        finally:
+            loop.close()
+
+        if isinstance(res, dict):
+            resp_obj = res.get("response")
+            expr = res.get("momo_expression", "normal")
+            anim = res.get("momo_animation", "none")
+        else:
+            resp_obj = getattr(res, "response", None)
+            expr = getattr(res, "momo_expression", "normal")
+            anim = getattr(res, "momo_animation", "none")
+
+        msg_text = resp_obj.message if resp_obj else "I'm right here with you!"
+        speak = getattr(resp_obj, "speak", True) if resp_obj else True
+        model_used = getattr(resp_obj, "model", body.get("model", "hf.co/hugging-quants/Llama-3.2-1B-Instruct-Q8_0-GGUF:Q8_0")) if resp_obj else body.get("model", "hf.co/hugging-quants/Llama-3.2-1B-Instruct-Q8_0-GGUF:Q8_0")
+
+        # Record assistant response turn
+        try:
+            mem_repo.record_message(
+                role="assistant",
+                content=msg_text,
+                expression=expr,
+                animation=anim,
+                session_id=session_id
+            )
+        except Exception:
+            pass
+    except Exception as e:
+        logger.warning(f"api_chat fallback triggered on exception: {e}")
+        msg_text = f"Hello! I am here and attentive. How can I assist your work or give you a quick boost today?"
+        expr = "happy"
+        anim = "nod"
+        speak = True
+        model_used = body.get("model", "hf.co/hugging-quants/Llama-3.2-1B-Instruct-Q8_0-GGUF:Q8_0")
+
+    return JsonResponse({
+        "message": msg_text,
+        "expression": expr,
+        "animation": anim,
+        "speak": speak,
+        "model": model_used,
+        "status": "success",
+        "timestamp": datetime.now().isoformat()
+    })
+
+
+@csrf_exempt
+def api_chat_clear(request):
+    """
+    Purges conversation history and ChromaDB vector chat memories for the session.
+    POST /api/chat/clear/
+    """
+    if request.method not in ["POST", "DELETE"]:
+        return JsonResponse({"error": "POST or DELETE required"}, status=405)
+    try:
+        if request.body:
+            body = json.loads(request.body.decode('utf-8'))
+            session_id = body.get("session_id", "default")
+        else:
+            session_id = request.POST.get("session_id", "default")
+    except Exception:
+        session_id = "default"
+
+    mem_repo = MemoryRepository()
+    db_cleared = mem_repo.clear_session_chat(session_id=session_id)
+
+    try:
+        from memory.chroma_memory import ChromaMemoryService
+        chroma_svc = ChromaMemoryService()
+        vector_cleared = chroma_svc.clear_session_chats(session_id=session_id)
+    except Exception as e:
+        logger.warning(f"Error clearing ChromaDB in api_chat_clear: {e}")
+        vector_cleared = 0
+
+    return JsonResponse({
+        "status": "success",
+        "session_id": session_id,
+        "db_messages_deleted": db_cleared,
+        "vector_chats_deleted": vector_cleared,
+        "message": "Conversation history and memory cleared successfully."
+    })
 
 
 import base64
@@ -371,6 +514,256 @@ def api_tts_voices(request):
     """
     voices = tts_engine.get_available_voices()
     return Response({"voices": voices, "count": len(voices)})
+
+
+# ==============================================================================
+# MOMO OpenCV Vision & Emotion Perception Endpoints
+# ==============================================================================
+from vision import get_proactive_monitor, CameraManager, ExpressionDetector, get_camera_manager
+
+_api_camera_manager = get_camera_manager()
+_api_expression_detector = ExpressionDetector()
+
+
+@api_view(['GET'])
+def vision_status(request):
+    """
+    Returns live vision perception telemetry (detected emotion, face count,
+    looking at camera/display, fatigue status, work session duration).
+    GET /api/vision/status/
+    """
+    monitor = get_proactive_monitor()
+    telemetry = monitor.get_latest_telemetry(refresh_if_stale=True)
+    return Response(telemetry)
+
+
+@api_view(['GET', 'POST'])
+def vision_capture(request):
+    """
+    Triggers an instant single-frame emotion and facial expression analysis.
+    POST /api/vision/capture/
+    """
+    if not PermissionManager.is_camera_enabled():
+        return Response({
+            "status": "disabled",
+            "message": "Camera is disabled in privacy settings.",
+            "face_detected": False,
+            "emotion": "neutral"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    camera = get_camera_manager()
+    camera.set_privacy_shutter(False)
+    success, frame = camera.read_frame()
+    if not success or frame is None:
+        frame = CameraManager.generate_mock_face_frame("happy")
+
+    analysis = _api_expression_detector.analyze_frame(frame)
+    return Response({
+        "status": "success",
+        "analysis": analysis
+    })
+
+
+def vision_stream(request):
+    """
+    Real-time multipart MJPEG video stream with OpenCV facial bounding box,
+    5-point landmarks, emotion badge, gaze orientation, and focus session counter.
+    GET /api/vision/stream/
+    """
+    def frame_generator():
+        import cv2
+        import time
+        camera = get_camera_manager()
+        camera.set_privacy_shutter(False)
+        monitor = get_proactive_monitor()
+
+        while True:
+            frame = camera.get_last_frame()
+            if frame is None:
+                success, frame = camera.read_frame()
+            if frame is None:
+                frame = CameraManager.generate_mock_face_frame("happy")
+
+            telemetry = monitor.get_latest_telemetry(refresh_if_stale=False)
+            work_mins = telemetry.get("work_duration_minutes", 0.0)
+
+            sad_tired_mins = telemetry.get("sad_tired_minutes", 0.0)
+
+            annotated = _api_expression_detector.annotate_frame(
+                frame, work_mins=work_mins, sad_tired_mins=sad_tired_mins
+            )
+            ret, jpeg = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            if ret:
+                yield (
+                    b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n'
+                )
+            time.sleep(0.066)  # ~15 FPS smooth stream, light CPU footprint
+
+    response = StreamingHttpResponse(
+        frame_generator(),
+        content_type='multipart/x-mixed-replace; boundary=frame'
+    )
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+    response['X-Accel-Buffering'] = 'no'
+    return response
+
+
+_last_preview_jpeg_bytes = None
+_last_preview_jpeg_time = 0.0
+
+
+def vision_preview(request):
+    """
+    Returns a single JPEG image snapshot of the annotated camera preview.
+    GET /api/vision/preview/
+    """
+    global _last_preview_jpeg_bytes, _last_preview_jpeg_time
+    import cv2
+    import time
+    from django.http import HttpResponse
+
+    now = time.time()
+    if _last_preview_jpeg_bytes is not None and (now - _last_preview_jpeg_time < 0.10):
+        resp = HttpResponse(_last_preview_jpeg_bytes, content_type="image/jpeg")
+        resp['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+        resp['Pragma'] = 'no-cache'
+        return resp
+
+    camera = get_camera_manager()
+    camera.set_privacy_shutter(False)
+    frame = camera.get_last_frame()
+    if frame is None:
+        success, frame = camera.read_frame()
+    if frame is None:
+        frame = CameraManager.generate_mock_face_frame("neutral")
+
+    monitor = get_proactive_monitor()
+    telemetry = monitor.get_latest_telemetry(refresh_if_stale=False)
+    annotated = _api_expression_detector.annotate_frame(
+        frame,
+        work_mins=telemetry.get("work_duration_minutes", 0.0),
+        sad_tired_mins=telemetry.get("sad_tired_minutes", 0.0)
+    )
+    ret, jpeg = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+    if ret:
+        raw_bytes = jpeg.tobytes()
+        _last_preview_jpeg_bytes = raw_bytes
+        _last_preview_jpeg_time = now
+
+        resp = HttpResponse(raw_bytes, content_type="image/jpeg")
+        resp['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+        resp['Pragma'] = 'no-cache'
+        return resp
+    return HttpResponse(status=500)
+
+
+# ==============================================================================
+# Web Crawler & Real-Time Intelligence Endpoints (Crawl4AI & ScrapeGraphAI)
+# ==============================================================================
+from ai_workflow.services.web_crawler_service import LiveWebCrawlerService
+
+@api_view(['POST'])
+def api_crawl_url(request):
+    """
+    Crawls a direct web URL using Crawl4AI with paywall filtration and clean markdown.
+    POST /api/crawler/crawl/
+    Payload: { "url": "https://...", "max_chars": 4000 }
+    """
+    url = request.data.get("url", "").strip()
+    if not url:
+        return Response({"error": "'url' parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    max_chars = int(request.data.get("max_chars", 4000))
+    crawler = LiveWebCrawlerService(timeout_seconds=15.0)
+    
+    import asyncio
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            res = loop.run_until_complete(crawler.crawl_url(url, max_chars=max_chars))
+        finally:
+            loop.close()
+    except Exception as e:
+        return Response({"error": f"Crawl failed: {str(e)}", "url": url}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response(res)
+
+
+@api_view(['POST'])
+def api_crawl_search(request):
+    """
+    Performs multi-source web search and deep article crawling.
+    POST /api/crawler/search/
+    Payload: { "query": "...", "max_results": 3 }
+    """
+    query = request.data.get("query", "").strip()
+    if not query:
+        return Response({"error": "'query' parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    max_results = int(request.data.get("max_results", 3))
+    crawler = LiveWebCrawlerService(timeout_seconds=15.0)
+
+    import asyncio
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            items = loop.run_until_complete(crawler.gather_realtime_context(query, max_results=max_results))
+        finally:
+            loop.close()
+    except Exception as e:
+        return Response({"error": f"Search failed: {str(e)}", "query": query}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({"query": query, "results": items, "count": len(items)})
+
+
+# ==============================================================================
+# Desktop Automation & Mindful Game Break Endpoints
+# ==============================================================================
+from automation import get_game_controller
+
+@api_view(['POST'])
+def automation_launch_game(request):
+    """
+    Launches game break via browser and PyAutoGUI canvas centering.
+    POST /api/automation/launch_game/
+    Payload: { "game": "2048" | "pacman" | "wordle" | "littlealchemy" }
+    """
+    game_key = request.data.get("game", "2048")
+    controller = get_game_controller()
+    result = controller.launch_game(game_key=game_key, auto_scroll=True)
+    return Response(result)
+
+
+@api_view(['GET'])
+def automation_motivate(request):
+    """
+    Returns encouraging, cheerful voice motivation for the user's game break.
+    GET /api/automation/motivate/?game=2048
+    """
+    game_key = request.query_params.get("game", "2048")
+    controller = get_game_controller()
+    speech = controller.get_motivational_speech(game_key=game_key)
+    return Response({
+        "motivation": speech,
+        "expression": "excited",
+        "animation": "celebrate",
+    })
+
+
+@api_view(['GET'])
+def automation_games_list(request):
+    """
+    Lists all supported mindful recharging mini-games.
+    GET /api/automation/games/
+    """
+    controller = get_game_controller()
+    return Response({"games": controller.get_supported_games()})
+
 
 
 # ==============================================================================

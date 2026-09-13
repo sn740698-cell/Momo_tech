@@ -103,3 +103,49 @@ export async function wipeMemories(): Promise<void> {
   const res = await fetch(`${API_BASE}/memory/`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`Wipe memory failed (${res.status})`);
 }
+
+export async function sendApiChatMessage(
+  message: string,
+  model?: string
+): Promise<{
+  message: string;
+  expression?: string;
+  animation?: string;
+  speak?: boolean;
+  thinking?: string;
+  model?: string;
+}> {
+  const res = await fetch(`${API_BASE}/chat/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message,
+      model,
+    }),
+  });
+  if (!res.ok) throw new Error(`Chat API error (${res.status})`);
+  return res.json();
+}
+
+export async function launchGameAutomation(game: string = '2048'): Promise<any> {
+  const res = await fetch(`${API_BASE}/automation/launch_game/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ game }),
+  });
+  if (!res.ok) throw new Error(`Game launch failed (${res.status})`);
+  return res.json();
+}
+
+export async function fetchGameMotivation(game?: string): Promise<{ motivation: string; expression: string }> {
+  const res = await fetch(`${API_BASE}/automation/motivate/?game=${encodeURIComponent(game || '')}`);
+  if (!res.ok) throw new Error(`Fetch motivation failed (${res.status})`);
+  return res.json();
+}
+
+export async function fetchVisionStatus(): Promise<any> {
+  const res = await fetch(`${API_BASE}/vision/status/`);
+  if (!res.ok) throw new Error(`Vision status failed (${res.status})`);
+  return res.json();
+}
+

@@ -116,6 +116,26 @@ export const MomoAvatar: React.FC<MomoAvatarProps> = ({
             <circle cx="136" cy="64" r="4" fill="#ffffff" />
           </g>
         );
+      case 'tired':
+        return (
+          <g fill="none" stroke="#a78bfa" strokeWidth="4" strokeLinecap="round">
+            {/* Droopy, heavy eyelids */}
+            <path d="M 45 68 Q 60 62 75 70" />
+            <path d="M 125 70 Q 140 62 155 68" />
+            <line x1="50" y1="76" x2="70" y2="76" stroke="#c4b5fd" strokeWidth="2" />
+            <line x1="130" y1="76" x2="150" y2="76" stroke="#c4b5fd" strokeWidth="2" />
+          </g>
+        );
+      case 'stressed':
+        return (
+          <g fill="#f59e0b">
+            {/* Furrowed brow dots and tense eyes */}
+            <circle cx="60" cy="65" r="11" />
+            <circle cx="140" cy="65" r="11" />
+            <path d="M 48 50 L 72 58" stroke="#d97706" strokeWidth="3" strokeLinecap="round" />
+            <path d="M 152 50 L 128 58" stroke="#d97706" strokeWidth="3" strokeLinecap="round" />
+          </g>
+        );
       default: // normal
         return (
           <g fill="#10b981">
@@ -167,6 +187,10 @@ export const MomoAvatar: React.FC<MomoAvatarProps> = ({
         );
       case 'sleepy':
         return <circle cx="100" cy="100" r="6" fill="none" stroke="#34d399" strokeWidth="3" />;
+      case 'tired':
+        return <path d="M 88 104 Q 100 98 112 104" fill="none" stroke="#a78bfa" strokeWidth="4" strokeLinecap="round" />;
+      case 'stressed':
+        return <path d="M 85 106 L 95 102 L 105 106 L 115 102" fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />;
       default:
         return <path d="M 85 96 Q 100 115 115 96" fill="none" stroke="#10b981" strokeWidth="4" strokeLinecap="round" />;
     }

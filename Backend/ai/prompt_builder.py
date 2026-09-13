@@ -22,9 +22,20 @@ class PromptBuilder:
         active_app: str = "",
         session_minutes: int = 0,
         idle_seconds: int = 0,
-        custom_instructions: Optional[str] = None
+        custom_instructions: Optional[str] = None,
+        user_emotion: Optional[str] = None,
+        fatigue_detected: bool = False,
+        looking_at_momo: bool = False,
+        work_duration_minutes: float = 0.0,
+        proactive_trigger: Optional[str] = None,
+        query_decomposition: Optional[Dict[str, Any]] = None,
+        reinforced_rules: Optional[List[str]] = None
     ) -> str:
         prompt_parts = [BASE_SYSTEM_PROMPT]
+
+        # Query decomposition & comprehension plan (ensures every sub-goal is understood)
+        if query_decomposition and query_decomposition.get("comprehension_directive"):
+            prompt_parts.append(query_decomposition["comprehension_directive"])
 
         # Deterministic Temporal & Environmental Grounding
         anchor = TemporalService.get_temporal_anchor()
@@ -46,10 +57,30 @@ class PromptBuilder:
 
         prompt_parts.append("\n[TELEMETRY & ENVIRONMENT]\n" + "\n".join(context_block))
 
+        # Real-time Computer Vision & Emotion Perception Grounding
+        perception_block = []
+        if user_emotion:
+            perception_block.append(f"- Detected User Emotion: {user_emotion.upper()}")
+        perception_block.append(f"- User Looking at MOMO (Camera / OLED Display): {'YES' if looking_at_momo else 'NO'}")
+        if work_duration_minutes > 0:
+            perception_block.append(f"- Continuous Work Session Duration: {work_duration_minutes:.1f} minutes")
+        if fatigue_detected:
+            perception_block.append("- FATIGUE / PROLONGED WORK ALERT: Active! The user has been working continuously (>30 mins) or looks visibly exhausted. Suggest a restful break or offer to play a fun game!")
+        if proactive_trigger:
+            perception_block.append(f"- Proactive Action Trigger: {proactive_trigger}")
+
+        if perception_block:
+            prompt_parts.append("\n[USER EMOTION & PERCEPTION TELEMETRY]\n" + "\n".join(perception_block))
+
         # Long-term memory block
         if memories and len(memories) > 0:
             memory_lines = [f"- {m}" for m in memories]
             prompt_parts.append("\nSTORED FACTS ABOUT USER:\n" + "\n".join(memory_lines))
+
+        # Active reinforced rules taught by user
+        if reinforced_rules and len(reinforced_rules) > 0:
+            rule_lines = [f"- {r}" for r in reinforced_rules]
+            prompt_parts.append("\n[ACTIVE REINFORCED RULES LEARNED FROM USER]:\n" + "\n".join(rule_lines))
 
         # Additional instructions
         if custom_instructions:

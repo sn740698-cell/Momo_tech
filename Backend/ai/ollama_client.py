@@ -3,6 +3,7 @@ import json
 import logging
 from typing import Dict, Any, List, Optional
 import requests
+import httpx
 from asgiref.sync import sync_to_async
 
 logger = logging.getLogger(__name__)
@@ -135,6 +136,14 @@ class OllamaClient:
                 "status_code": 503
             }
 
+    _async_client: Optional[httpx.AsyncClient] = None
+
+    @classmethod
+    def get_async_client(cls) -> httpx.AsyncClient:
+        if cls._async_client is None or cls._async_client.is_closed:
+            cls._async_client = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=15.0))
+        return cls._async_client
+
     async def chat(
         self,
         messages: List[Dict[str, str]],
@@ -142,16 +151,66 @@ class OllamaClient:
         temperature: float = 0.35,
         system_prompt: Optional[str] = None,
         timeout_seconds: Optional[int] = None,
-        format: Optional[str] = "json",
-        num_predict: int = 640
+        format: Optional[str] = None,
+        num_predict: int = 384
     ) -> Dict[str, Any]:
-        return await sync_to_async(self.chat_sync)(
-            messages=messages,
-            model=model,
-            temperature=temperature,
-            system_prompt=system_prompt,
-            timeout_seconds=timeout_seconds,
-            format=format,
-            num_predict=num_predict
-        )
+        """
+        Fast native asynchronous chat completion request to Ollama using persistent connection pool.
+        Keeps model memory-resident (keep_alive: 60m) for sub-second responses.
+        """
+        timeout = timeout_seconds or int(os.getenv("OLLAMA_TIMEOUT", "90"))
+        formatted_messages = []
+        has_system = any(m.get("role") == "system" for m in messages)
+        if not has_system and system_prompt:
+            formatted_messages.append({"role": "system", "content": system_prompt})
+        formatted_messages.extend(messages)
+
+        payload = {
+            "model": model,
+            "messages": formatted_messages,
+            "stream": False,
+            "keep_alive": "60m",
+            "options": {
+                "temperature": float(temperature),
+                "num_ctx": 2048,
+                "num_predict": num_predict,
+                "top_k": 40,
+                "top_p": 0.9,
+            }
+        }
+        if format:
+            payload["format"] = format
+
+        try:
+            client = self.get_async_client()
+            req_timeout = httpx.Timeout(float(timeout), connect=10.0)
+            resp = await client.post(f"{self.host}/api/chat", json=payload, timeout=req_timeout)
+            if resp.status_code == 200:
+                data = resp.json()
+                msg_obj = data.get("message", {})
+                return {
+                    "success": True,
+                    "content": msg_obj.get("content", ""),
+                    "thinking": msg_obj.get("thinking", ""),
+                    "model": model,
+                    "total_duration": data.get("total_duration"),
+                }
+            elif resp.status_code == 404:
+                return {
+                    "success": False,
+                    "error": f"Model '{model}' not found in Ollama library.",
+                    "status_code": 404
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Ollama error HTTP {resp.status_code}: {resp.text}",
+                    "status_code": resp.status_code
+                }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Could not connect to Ollama at {self.host}: {str(e)}",
+                "status_code": 503
+            }
 

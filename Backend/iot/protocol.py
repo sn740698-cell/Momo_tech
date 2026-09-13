@@ -27,6 +27,8 @@ OLED_FACE_MAP = {
     "surprised": "( o _ O )",
     "proud": "( ^ w ^ )",
     "embarrassed": "( >///< )",
+    "tired": "( - _ - )",
+    "stressed": "( ~ _ ~ )",
 }
 
 

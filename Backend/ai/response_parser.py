@@ -95,15 +95,24 @@ class ResponseParser:
         cleaned = re.sub(r'^["\']?User["\']?,\s*[^:]+:\s*', '', cleaned, flags=re.IGNORECASE)
         cleaned = re.sub(r'^User:\s*', '', cleaned, flags=re.IGNORECASE)
 
-        # Strip placeholder echoes
-        if cleaned.lower() in [
-            "your direct, helpful, and accurate response to the user",
-            "your conversational response in markdown text",
-            "your conversational response",
-            "<your response>",
-            "<your helpful and accurate response>",
-            "<your complete, articulate response here>"
-        ]:
+        # Strip placeholder echoes and template brackets
+        lower_cleaned = cleaned.lower()
+        if (
+            lower_cleaned in [
+                "your direct, helpful, and accurate response to the user",
+                "your conversational response in markdown text",
+                "your conversational response",
+                "<your response>",
+                "<your helpful and accurate response>",
+                "<your complete, articulate response here>",
+                "<your caring, articulate response here>",
+                "<your caring, articulate response here.>",
+                "your caring, articulate response here",
+            ]
+            or re.match(r"^<[^>]*response[^>]*>$", lower_cleaned)
+            or re.match(r"^<[^>]+>$", cleaned.strip())
+            or "your caring, articulate response" in lower_cleaned
+        ):
             cleaned = ""
 
         # Strip surrounding double or single quotes if wrapped
@@ -208,6 +217,32 @@ class ResponseParser:
             raw_msg = parsed_dict.get("message", "")
             if not raw_msg and "content" in parsed_dict:
                 raw_msg = str(parsed_dict["content"])
+            if not raw_msg and "response" in parsed_dict:
+                raw_msg = str(parsed_dict["response"])
+            if not raw_msg and "text" in parsed_dict:
+                raw_msg = str(parsed_dict["text"])
+
+            # If still empty, recover answer from custom topic keys (e.g. {"Python 3.13": "..."} or nested dicts)
+            if not raw_msg:
+                for k, v in parsed_dict.items():
+                    if k.lower() not in ["expression", "animation", "speak", "priority", "model", "ascii"]:
+                        if isinstance(v, str) and len(v.strip()) > 10:
+                            raw_msg = v.strip()
+                            break
+                        elif isinstance(v, dict):
+                            parts = []
+                            for sub_k, sub_v in v.items():
+                                if isinstance(sub_v, str):
+                                    parts.append(f"{sub_k}: {sub_v}")
+                                elif isinstance(sub_v, list):
+                                    parts.append(f"{sub_k}: {', '.join(str(x) for x in sub_v)}")
+                            if parts:
+                                raw_msg = "\n".join(parts)
+                                break
+                        elif isinstance(v, list) and v:
+                            raw_msg = f"{k}: " + ", ".join(str(x) for x in v)
+                            break
+
             msg = cls.clean_text(str(raw_msg))
             expr = cls.normalize_expression(parsed_dict.get("expression", "normal"))
             anim = cls.normalize_animation(parsed_dict.get("animation", "none"))
@@ -224,7 +259,7 @@ class ResponseParser:
                     animation=anim,
                     speak=speak,
                     priority=prio,
-                    ascii=EXPRESSION_ASCII.get(expr, "◕ᴗ◕"),
+                    ascii=EXPRESSION_ASCII.get(expr, "(^_^)"),
                     thinking=thinking_text,
                     model=model
                 )
@@ -232,7 +267,8 @@ class ResponseParser:
         # 4. Fallback: LLM replied with plain text without JSON wrapper
         # Extract plain message, infer expression from keywords
         plain_msg = cls.clean_text(cleaned)
-        if not plain_msg or plain_msg.strip() in ["{", "}", '""', "...", ""]:
+        stripped_compact = re.sub(r'[\s\{\}\[\]"\']+', '', plain_msg)
+        if not plain_msg or not stripped_compact or stripped_compact in [":", "::", ".", "..", "...", "null", "none"]:
             plain_msg = "I am at your service. Please let me know how I can assist you."
 
         inferred_expr = "normal"
@@ -256,7 +292,7 @@ class ResponseParser:
             animation=inferred_anim,
             speak=True,
             priority="normal",
-            ascii=EXPRESSION_ASCII.get(inferred_expr, "◕ᴗ◕"),
+            ascii=EXPRESSION_ASCII.get(inferred_expr, "(^_^)"),
             thinking=thinking_text,
             model=model
         )

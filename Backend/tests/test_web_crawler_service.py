@@ -1,12 +1,13 @@
 """
 Unit Tests for LiveWebCrawlerService.
 Verifies HTML cleaning, national news feeds, Wikipedia observances,
-paywall filtering, and real-time context gathering.
+Crawl4AI deep article extraction, ScrapeGraphAI knowledge integration,
+and verifies complete removal of DuckDuckGo.
 """
 import unittest
 import asyncio
 from unittest.mock import patch, AsyncMock
-from ai_workflow.services.web_crawler_service import LiveWebCrawlerService
+from ai_workflow.services.web_crawler_service import LiveWebCrawlerService, is_crawl4ai_available, is_scrapegraphai_available
 
 
 class TestLiveWebCrawlerService(unittest.TestCase):
@@ -38,6 +39,21 @@ class TestLiveWebCrawlerService(unittest.TestCase):
         self.assertFalse(self.crawler.is_valid_article_body(title, paywall_body))
         self.assertFalse(self.crawler.is_valid_article_body(title, unrelated_body))
 
+    def test_duckduckgo_completely_removed(self):
+        """Strict requirement: DuckDuckGo must not exist in LiveWebCrawlerService."""
+        self.assertFalse(hasattr(self.crawler, "search_duckduckgo"))
+        # Check source code text
+        import inspect
+        src = inspect.getsource(LiveWebCrawlerService)
+        self.assertNotIn("duckduckgo.com/html", src.lower())
+
+    def test_crawl4ai_and_scrapegraphai_presence(self):
+        """Verifies Crawl4AI and ScrapeGraphAI methods exist and libraries are available."""
+        self.assertTrue(hasattr(self.crawler, "crawl_with_crawl4ai"))
+        self.assertTrue(hasattr(self.crawler, "search_and_scrape_with_graphai"))
+        self.assertTrue(is_crawl4ai_available())
+        self.assertTrue(is_scrapegraphai_available())
+
     def test_gather_realtime_context(self):
         sample_items = [
             {
@@ -50,10 +66,14 @@ class TestLiveWebCrawlerService(unittest.TestCase):
             }
         ]
 
-        with patch.object(self.crawler, "fetch_direct_national_news", new_callable=AsyncMock) as mock_news:
+        with patch.object(self.crawler, "fetch_bing_search", new_callable=AsyncMock) as mock_bing, \
+             patch.object(self.crawler, "fetch_wikipedia_search", new_callable=AsyncMock) as mock_wiki, \
+             patch.object(self.crawler, "fetch_direct_national_news", new_callable=AsyncMock) as mock_news:
+            mock_bing.return_value = []
+            mock_wiki.return_value = []
             mock_news.return_value = sample_items
             res = asyncio.run(self.crawler.gather_realtime_context(
-                query="Indian government",
+                query="Indian government news",
                 target_date="2026-09-06",
                 target_label="yesterday"
             ))

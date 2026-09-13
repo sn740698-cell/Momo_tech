@@ -2,6 +2,7 @@
 Memory & Context Agent for MOMO.
 Retrieves historical facts, saves explicit memories, and semantic-indexes conversations in ChromaDB.
 """
+import re
 import logging
 from typing import Dict, Any
 
@@ -107,15 +108,25 @@ class MemoryAgent:
             context_blocks.append(state.conversation_context)
 
         try:
-            # 1. Query ChromaDB vector memory for past conversation turns
-            past_chats = await self.memory_manager.search_past_chat_context(query=last_query, limit=2)
-            if past_chats:
-                context_blocks.append("[RELEVANT PAST CONVERSATIONS FROM VECTOR DB]:\n" + "\n---\n".join(past_chats))
+            # 1. Query ChromaDB vector memory for past conversation turns ONLY if user explicitly references past context
+            # to prevent clinging to old topics when user switches topics
+            lower_q = last_query.lower()
+            is_referential = any(r in lower_q for r in [
+                "earlier", "previous", "we discussed", "remember", "before", "last time", "tell me more", "as you said"
+            ])
+            if is_referential:
+                past_chats = await self.memory_manager.search_past_chat_context(query=last_query, limit=2)
+                if past_chats:
+                    context_blocks.append("[RELEVANT PAST CONVERSATIONS FROM VECTOR DB]:\n" + "\n---\n".join(past_chats))
 
-            # 2. Retrieve user facts / preferences from database
-            facts = await self.memory_manager.get_relevant_memories(query=last_query, limit=3)
-            if facts:
-                context_blocks.append("[STORED USER FACTS]:\n" + "\n".join(f"- {f}" for f in facts))
+            # 2. Retrieve user facts / preferences from database ONLY if user asks about personal details
+            user_personal = any(re.search(rf"\b{w}\b", lower_q) for w in [
+                "my", "i", "me", "mine", "myself", "prefer", "favorite", "favourite", "remember"
+            ])
+            if user_personal:
+                facts = await self.memory_manager.get_relevant_memories(query=last_query, limit=3)
+                if facts:
+                    context_blocks.append("[STORED USER FACTS]:\n" + "\n".join(f"- {f}" for f in facts))
 
             # 3. Extract heuristic facts in background
             await self.memory_manager.extract_and_store_facts(last_query)

@@ -52,6 +52,19 @@ class RootSupervisor:
 
         lower = text.lower()
 
+        # Check for explicit desktop automation intent (e.g. 'open instagram', 'open youtube', 'play 2048')
+        from automation import get_desktop_controller
+        if get_desktop_controller().extract_automation_intent(text):
+            return "automation"
+
+        # Check for live web crawl and research intent (e.g. 'crawl', 'scrape', 'search web', 'sih', 'hackathon', 'news', 'happening')
+        if any(w in lower for w in [
+            "crawl", "scrape", "web crawl", "search web", "look up", "research",
+            "sih", "hackathon", "smart india hackathon", "news", "happening",
+            "latest", "trending", "current events", "updates on"
+        ]) or re.search(r'https?://', text):
+            return "research"
+
         # Communication keywords (drafting, texting, notifications)
         if any(w in lower for w in COMMUNICATION_KEYWORDS) and any(w in lower for w in ["reminder", "draft", "invoice", "balance", "customer", "rahul", "client"]):
             return "communication"
@@ -68,28 +81,41 @@ class RootSupervisor:
 
     @classmethod
     def extract_active_topic(cls, text: str, messages: list) -> str:
-        """Extracts the subject of interest from current prompt or prior conversation turns."""
-        lower = text.lower()
+        """Extracts the subject of interest strictly from current prompt, only falling back if explicitly anaphoric."""
+        lower = text.lower().strip()
         # 1. Explicit topic in current message (e.g. 'tell me more about Virat Kohli')
         m = re.search(r"(?:about|on|regarding)\s+([A-Za-z0-9\s]+)", text, re.IGNORECASE)
         if m:
             cand = m.group(1).strip().rstrip("?.!")
-            if len(cand) > 1 and cand.lower() not in ["it", "this", "that", "him", "her", "them"]:
+            if len(cand) > 1 and cand.lower() not in ["it", "this", "that", "him", "her", "them", "more"]:
                 return cand
 
-        # 2. Check prior user questions in conversation turns
-        if messages and len(messages) > 1:
+        # 2. Direct question in current message
+        q_match = re.search(r"(?:who is|what is|how does|tell me about|explain)\s+([A-Za-z0-9\s]+)", text, re.IGNORECASE)
+        if q_match:
+            cand = q_match.group(1).strip().rstrip("?.!")
+            if cand and cand.lower() not in ["it", "this", "that", "him", "her", "them"]:
+                return cand
+
+        # 3. Only check immediately preceding turn if user said an anaphoric follow-up (e.g. 'tell me more', 'tell me more about him')
+        is_anaphoric = any(w in lower for w in [
+            "tell me more", "tell more", "more about", "about him", "about her", "about it",
+            "elaborate", "continue", "what else", "go deeper", "more details", "who is he", "who is she"
+        ])
+        if is_anaphoric and messages and len(messages) > 1:
             for msg in reversed(messages[:-1]):
                 m_text = getattr(msg, "content", "") if hasattr(msg, "content") else msg.get("content", "")
                 m_match = re.search(r"(?:who is|what is|tell me about|about)\s+([A-Za-z0-9\s]+)", m_text, re.IGNORECASE)
                 if m_match:
                     cand = m_match.group(1).strip().rstrip("?.!")
-                    if cand and cand.lower() not in ["it", "this", "that"]:
+                    if cand and cand.lower() not in ["it", "this", "that", "him", "her", "them"]:
                         return cand
                 if getattr(msg, "role", "") == "user" and 3 <= len(m_text.strip()) <= 40:
-                    return m_text.strip().rstrip("?.!")
+                    cand = m_text.strip().rstrip("?.!")
+                    if not any(w in cand.lower() for w in ["hello", "hi", "ok", "yes", "sure", "thanks"]):
+                        return cand
 
-        return "the previous topic"
+        return text.strip().rstrip("?.!") or "the requested topic"
 
     @classmethod
     def safe_eval_math(cls, text: str) -> Optional[str]:
@@ -158,10 +184,11 @@ class RootSupervisor:
                 "directive": f"The user is asking to recall information from their saved memory records (query: '{search_query or 'all'}'). Present the stored facts in an articulate, dignified, and organized manner."
             }
 
-        # 3. Conversational Follow-Up / Deepening ('tell me more')
+        # 3. Conversational Follow-Up / Deepening ('tell me more', 'tell me more about him')
         if any(w in lower for w in [
             "tell me more", "give me more", "more details", "elaborate", "what else",
-            "tell me more about", "give me more about", "continue", "go deeper"
+            "tell me more about", "give me more about", "continue", "go deeper",
+            "tell more", "more about", "about him", "about her", "about it"
         ]):
             topic = cls.extract_active_topic(text, msgs)
             return {
@@ -189,14 +216,38 @@ class RootSupervisor:
                 "directive": calc_directive
             }
 
-        # 5. Confirmation / Affirmation / Success feedback
+        # Check explicit desktop automation intent (e.g. 'open instagram', 'open youtube', 'play 2048')
+        from automation import get_desktop_controller
+        auto_intent = get_desktop_controller().extract_automation_intent(text)
+        if auto_intent:
+            return {
+                "intent": "automation",
+                "directive": f"The user requested desktop automation to {auto_intent.get('type')}: '{auto_intent.get('name')}'. Confirm cheerfully that it has been opened on their machine."
+            }
+
+        # Check live web crawl / research intent (e.g. 'crawl', 'scrape', 'search web', 'sih', 'hackathon', 'news', 'happening')
         if any(w in lower for w in [
-            "yep", "yeah", "yes", "working", "works", "correctly", "fine", "ok", "okay",
-            "great", "awesome", "perfect", "good job", "nice", "got it", "understood", "cool"
-        ]):
+            "crawl", "scrape", "web crawl", "search web", "look up", "research",
+            "sih", "hackathon", "smart india hackathon", "news", "happening",
+            "latest", "trending", "current events", "updates on"
+        ]) or re.search(r'https?://', text):
+            return {
+                "intent": "web_crawl",
+                "directive": "The user requested live web crawling and research. Synthesize authentic facts into a detailed, well-structured explanation. Never give generic cheerleading or game prompts."
+            }
+
+        # Confirmation / Affirmation / Success feedback (STRICT: only match standalone affirmations, e.g. "ok", "yes", "sure")
+        is_standalone_affirmation = bool(re.match(r"^(?:ok|okay|yes|yep|yeah|sure|fine|cool|perfect|works|great|nice)[\s.!]*$", lower))
+        if is_standalone_affirmation:
+            # Check if user is saying 'yes' to a 30-minute game break offer
+            if msgs and len(msgs) >= 2 and any(g in getattr(msgs[-2], "content", "").lower() for g in ["game break", "play a game", "play 2048"]):
+                return {
+                    "intent": "automation",
+                    "directive": "The user accepted your game break offer! Launch game 2048 and cheer them on."
+                }
             return {
                 "intent": "confirmation",
-                "directive": "The user is confirming that everything is working. Reply enthusiastically and politely, like: 'Delighted to hear that. What shall we explore or work on next?'"
+                "directive": "The user is acknowledging. Reply politely in MOMO's refined voice and ask how you can assist."
             }
 
         # 6. Identity / Capabilities / System role

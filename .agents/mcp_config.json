@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "momo-automation": {
+      "command": "c:\\Users\\darshini\\Desktop\\MOMO\\Backend\\venv\\Scripts\\python.exe",
+      "args": [
+        "c:\\Users\\darshini\\Desktop\\MOMO\\Backend\\automation\\momo_mcp_server.py"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}

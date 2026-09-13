@@ -2,234 +2,577 @@
 
 > **The Laptop is MOMO's Brain. The ESP32 is MOMO's Physical Body. Computer Vision is MOMO's Eyes. Desktop Automation is MOMO's Hands.**
 
-MOMO is a production-grade, modular, local-first AI companion robot platform. It seamlessly unifies an expressive digital React avatar, an animated ESP32 physical robotic body with OLED vector eyes and servo neck articulations, an 18-sensor FACS computer vision perception engine, a multi-supervisor LangGraph state machine, a 9-agent Mixture of Agents (MoA) research subsystem, and an autonomous desktop automation engine with reinforcement learning capabilities.
+MOMO is an enterprise-grade, local-first physical AI companion robot. It unifies an expressive digital React avatar, an animated ESP32 physical robotic body with OLED vector eyes and servo neck articulations, an 18-sensor FACS computer vision perception engine, a multi-supervisor LangGraph state machine, a 9-agent Mixture of Agents (MoA) research subsystem, and an autonomous desktop automation engine with reinforcement learning capabilities.
 
 ---
 
-## 🌟 Key Capabilities & System Highlights
-
-### 1. 100% Local Intelligence & Zero-Cloud Autonomy
-- **Local LLM Inference**: Powered by local Ollama models (`hf.co/hugging-quants/Llama-3.2-1B-Instruct-Q8_0-GGUF:Q8_0`, `qwen3:4b`, `llama3`, `mistral`) running entirely on-device without mandatory cloud subscriptions or API fees.
-- **GPU-Aware Execution**: Optimized for resource-constrained environments (such as RTX 2050 4GB laptop GPUs) with `torch.inference_mode()`, CUDA memory cleanup, and deterministic CPU fallback.
-- **Persistent Memory Resident Runtime**: Ollama model kept warm in memory (`keep_alive: 60m`) for sub-second to low-latency conversational response generation.
-
-### 2. Physical Robotic Body (ESP32 via USB-C)
-- **Zero-Configuration Hardware Connection**: Plug the ESP32 into the laptop via USB-C and launch with `start_momo.bat`. The serial bridge auto-detects baud rate (`115200`), establishes handshake packets, and transmits heartbeat telemetries.
-- **SSD1306 128x64 OLED Display**: Renders smooth vector eye animations, natural blinks, squints, looking directions, and 13 emotional states.
-- **SG90 Pan/Tilt Micro Servos**: Physical head movements reflecting emotional context (nodding in agreement, tilting curiously, celebrating victories, waving hello).
-- **Interactive Pushbutton & Status LED**: Physical tactile triggers for user interaction and hardware status confirmation.
-
-### 3. Real-Time Computer Vision & Emotion Perception Subsystem
-- **30 FPS High-Throughput Camera Engine**: Dedicated background acquisition thread in [`Backend/vision/camera.py`](file:///c:/Users/darshini/Desktop/MOMO/Backend/vision/camera.py) with zero artificial delay, delivering synchronized 30 FPS hardware capture.
-- **Sub-Millisecond Preview Cache**: In-memory JPEG frame buffer (`_last_preview_jpeg_bytes`, 100ms TTL) in [`Backend/api/views.py`](file:///c:/Users/darshini/Desktop/MOMO/Backend/api/views.py) providing `<1ms` preview endpoint latency without thread starvation or neural net re-inference overhead.
-- **Ocular-Roll Aligned Lip Slit Geometry**: Calibrated mouth curvature analyzer in [`Backend/vision/expression_detector.py`](file:///c:/Users/darshini/Desktop/MOMO/Backend/vision/expression_detector.py) that projects 7 upper/lower lip landmarks into head-roll-aligned coordinates. Eliminates false "HAPPY" classifications on resting faces (`-0.255` curvature correctly classified as `neutral`/`focused` with 85% confidence).
-- **18-Sensor FACS Facial Action Unit Estimation**: Estimates inner/outer brow raise, brow lowerer, lid tightener, cheek raise, nose wrinkle, lip corner puller/depressor, and chin raiser.
-- **Proactive Fatigue & Wellness Monitoring**: Tracks continuous work session duration, eye closure ratios (EAR), and posture to detect mental fatigue and proactively suggest restful breaks or games.
-- **Multi-User Face Profile Recognition**: In [`Backend/vision/face_recognizer.py`](file:///c:/Users/darshini/Desktop/MOMO/Backend/vision/face_recognizer.py), matches faces against stored embedding profiles (`face_profiles.json`) to greet users by name.
-
-### 4. Desktop & Browser Automation Engine
-- **Universal Desktop Controller** in [`Backend/automation/desktop_controller.py`](file:///c:/Users/darshini/Desktop/MOMO/Backend/automation/desktop_controller.py):
-  - **Websites & Web Apps**: Instant navigation to Instagram, YouTube, Google, GitHub, Twitter/X, Reddit, WhatsApp Web, LinkedIn, Netflix, and custom URLs.
-  - **Host Applications**: Launches Windows desktop tools including Notepad (`notepad.exe`), Calculator (`calc.exe`), Terminal (`wt.exe`), and Command Prompt (`cmd.exe`).
-  - **Anti-Burnout Game Breaks**: Launches mindful anti-stress games (2048, Pacman, Wordle, Little Alchemy) when work fatigue is detected or requested.
-- **Zero-Latency Fast-Path**: 5-second fast-path with dedicated token budgeting (`num_predict=48`) and guarded confirmation. MOMO executes the action immediately and cheerfully articulates confirmation.
-- **Dry-Run Safety Engine**: Controlled via `MOMO_AUTOMATION_DRY_RUN=1` for rapid integration testing without window spam.
-- **Model Context Protocol (MCP) Server**: Exposes MOMO automation tools (`momo_open_website`, `momo_launch_app`, `momo_launch_game`, `momo_web_crawl`) via [`Backend/automation/momo_mcp_server.py`](file:///c:/Users/darshini/Desktop/MOMO/Backend/automation/momo_mcp_server.py).
-
-### 5. Multi-Agent Web Research Squad
-Supervised by `ResearchSupervisor` with a 4-stage sequential agent pipeline:
-- **`SearchScoutAgent`**: Performs multi-angle query expansion, resolves direct domains (`python.org`, `wikipedia.org`), executes Bing Live Search, queries official Wikipedia APIs, and pulls live national RSS news feeds (The Hindu, Indian Express, NDTV, Times of India).
-- **`DeepScraperAgent`**: 4-tier parallel extraction hierarchy using Trafilatura, Readability-lxml, Crawl4AI dynamic rendering, and BeautifulSoup4 semantic paragraph parsing. Strips cookie banners, paywalls, and newsletters.
-- **`FactVerifierAgent`**: Cross-validates claims across sources, scores journalistic consensus, and detects contradictions.
-- **`RelevanceAnalyzerAgent`**: Filters out noise, scores paragraph relevance against user queries, and extracts key factual bullet points.
-- **Deterministic Temporal Grounding**: [`TemporalService`](file:///c:/Users/darshini/Desktop/MOMO/Backend/ai_workflow/services/temporal_service.py) computes calendar math deterministically (`today`, `yesterday`, day of week, timezone `Asia/Kolkata`, calendar observances like International Programmers' Day). Guarantees today's real news without stale 2022 hallucinations.
-
-### 6. Reinforcement Learning & Dynamic Rule Ingestion
-- **Continuous Rule Acquisition**: Natural language pattern matchers in [`Backend/memory/memory_manager.py`](file:///c:/Users/darshini/Desktop/MOMO/Backend/memory/memory_manager.py) detect instruction directives:
-  - *"Remember that..."*
-  - *"Learn that..."*
-  - *"From now on..."*
-  - *"My project name is..."*
-  - *"I prefer..."*
-- **Dual-Layer Persistence**: Reinforced rules are stored in SQLite permanent relational storage (`fact_type='rule'`, `confidence=1.0`) and indexed into ChromaDB vector memory.
-- **System Prompt Dynamic Conditioning**: In [`Backend/ai/prompt_builder.py`](file:///c:/Users/darshini/Desktop/MOMO/Backend/ai/prompt_builder.py), active reinforced rules are injected directly into every LLM invocation under `[ACTIVE REINFORCED RULES LEARNED FROM USER]`.
-- **Instant Recall**: User preferences (e.g., Python for backend coding) and project facts (e.g., project name "MOMO Robot") are recalled with sub-second latency.
+## 📑 Table of Contents
+1. [System Overview & Key Capabilities](#-system-overview--key-capabilities)
+2. [Complete Full-Stack Architecture (End-to-End)](#-complete-full-stack-architecture-end-to-end)
+   - [Tier 1: Physical Hardware & Embedded Firmware Layer](#tier-1-physical-hardware--embedded-firmware-layer-esp32)
+   - [Tier 2: Sensory Perception & Computer Vision Layer](#tier-2-sensory-perception--computer-vision-layer)
+   - [Tier 3: Gateway, Networking & Transport Layer](#tier-3-gateway-networking--transport-layer)
+   - [Tier 4: Companion Brain (LangGraph Multi-Supervisor Orchestration)](#tier-4-companion-brain-langgraph-multi-supervisor-orchestration)
+   - [Tier 5: 9-Agent Mixture of Agents (MoA) Reasoning Subsystem](#tier-5-9-agent-mixture-of-agents-moa-reasoning-subsystem)
+   - [Tier 6: Web Crawling & Real-Time Intelligence Squad](#tier-6-web-crawling--real-time-intelligence-squad)
+   - [Tier 7: Hybrid Memory & Reinforcement Learning Layer](#tier-7-hybrid-memory--reinforcement-learning-layer)
+   - [Tier 8: Desktop & Browser Automation Engine](#tier-8-desktop--browser-automation-engine)
+   - [Tier 9: Local LLM Runtime & Hardware Acceleration](#tier-9-local-llm-runtime--hardware-acceleration)
+   - [Tier 10: Frontend Client & Interactive UI Layer](#tier-10-frontend-client--interactive-ui-layer-react-18--vite--ts)
+3. [Life of a User Request (End-to-End Data Flow)](#-life-of-a-user-request-end-to-end-data-flow)
+4. [Comprehensive 30-Command Dual-Pass Verification Suite](#-comprehensive-30-command-dual-pass-verification-suite)
+5. [Codebase Organization](#-codebase-organization)
+6. [Quickstart & Operation Guide](#-quickstart--operation-guide)
+7. [License](#-license)
 
 ---
 
-## 🏗️ System Architecture
+## 🌟 System Overview & Key Capabilities
 
-### 1. High-Level Multi-Tier Architecture
+- **100% Local Intelligence**: Powered by Ollama (`hf.co/hugging-quants/Llama-3.2-1B-Instruct-Q8_0-GGUF:Q8_0`, `qwen3:4b`, `llama3`, `mistral`) running entirely on-device without cloud API keys or subscriptions.
+- **Physical Companion Body (ESP32)**: Single USB-C connection powers real-time animated vector eyes on a 128x64 I2C OLED display and 2-axis SG90 servo neck articulations (pan and tilt).
+- **Sub-Millisecond Computer Vision**: Dedicated 30 FPS background acquisition thread with atomic JPEG frame caching (`<1ms` preview latency). Ocular-roll aligned lip slit crease geometry prevents false smile classifications on resting faces (`focused`/`neutral` with 85% confidence).
+- **Autonomous Desktop Automation**: Instantly launches Windows applications (Notepad, Calculator, Terminal), opens web platforms (Instagram, YouTube, Google, GitHub, Twitter/X, Reddit, WhatsApp Web), and triggers anti-burnout game breaks (2048, Pacman, Wordle).
+- **Multi-Agent Web Research Squad**: 4-stage squad (`SearchScout` -> `DeepScraper` -> `FactVerifier` -> `RelevanceAnalyzer`) backed by direct national RSS feeds (The Hindu, Indian Express, NDTV, Times of India) and Trafilatura / Crawl4AI article extraction, dated today (Sunday, September 13, 2026).
+- **Reinforcement Learning & Memory Retention**: Dynamic rule ingestion (`"Remember that..."`, `"Learn that..."`, `"I prefer..."`) persisted into SQLite relational tables and ChromaDB semantic vector spaces, injected dynamically into LLM prompts.
+- **Dual-Pass 30-Command Verification**: Verified across 30 diverse commands executed twice (60 executions total) with a **100% pass rate**.
+
+---
+
+## 🏛️ Complete Full-Stack Architecture (End-to-End)
+
+The MOMO platform is architectured into **10 cohesive, modular tiers** spanning from physical hardware up to the interactive web frontend:
 
 ```mermaid
 flowchart TD
-    subgraph ClientLayer ["Client & Hardware Layer"]
-        UI["React Web Dashboard (Vite + TypeScript)"]
-        Cam["Laptop / USB Webcam (30 FPS Stream)"]
-        ESP["Physical Body: ESP32 Robot (USB-C)"]
-        ESP_Disp["SSD1306 OLED (Vector Eyes)"]
-        ESP_Servo["SG90 Servos (Pan/Tilt Head)"]
-        ESP --> ESP_Disp
-        ESP --> ESP_Servo
+    subgraph Tier10 ["Tier 10: Frontend Client Layer (React 18 + Vite + TS)"]
+        UI_Avatar["MomoAvatar (Vector Face & Expressions)"]
+        UI_Vision["VisionCard (Live Stream & FACS Telemetry)"]
+        UI_Chat["ChatWindow (Streaming Markdown & Code)"]
+        UI_IoT["Esp32Card (Hardware Telemetry & Servo Controls)"]
+        UI_Work["WorkflowDashboard (MoA DAG Visualizer)"]
     end
 
-    subgraph GatewayLayer ["Gateway & Transport Layer"]
-        ASGI["Django ASGI Application"]
-        REST["REST API Endpoints (/api/...)"]
-        WS["WebSocket Gateway (/ws/momo/)"]
-        Serial["USB-C SerialBridge Protocol (115200 baud)"]
-        PrevCache["In-Memory Preview Cache (<1ms TTL)"]
-        ASGI --> REST
-        ASGI --> WS
-        ASGI --> Serial
-        ASGI --> PrevCache
+    subgraph Tier3 ["Tier 3: Gateway, Networking & Transport Layer"]
+        ASGI["Django ASGI Application (Channels + Daphne)"]
+        REST_GW["REST API Endpoints (/api/...)"]
+        WS_GW["WebSocket Gateway (/ws/momo/)"]
+        Serial_GW["SerialBridge Protocol (115200 baud, 8N1)"]
+        Prev_Cache["In-Memory Preview Cache (<1ms TTL)"]
     end
 
-    subgraph LangGraphBrain ["Companion Brain (LangGraph Multi-Supervisor)"]
-        RootSup["Root Supervisor"]
+    subgraph Tier2 ["Tier 2: Sensory Perception & Computer Vision Layer"]
+        Webcam["Laptop / External HD Webcam"]
+        CamThread["CameraManager (30 FPS Lock-Free Buffer)"]
+        FaceDetector["YuNet ONNX Face Detector"]
+        FacsArray["18-Sensor FACS Action Unit Estimator"]
+        RollAlign["Face-Roll Aligned Landmark Transform"]
+        AttnTrack["AttentionTracker (EAR + Gaze Tracking)"]
+        Proactive["ProactiveMonitor (Fatigue & Posture Alert)"]
+        FaceRecog["FaceRecognizer (SFace Embeddings)"]
+    end
+
+    subgraph Tier1 ["Tier 1: Physical Hardware & Firmware Layer (ESP32)"]
+        ESP32["ESP32 Microcontroller (Tensilica Dual-Core 240MHz)"]
+        OLED["SSD1306 128x64 OLED (Vector Eyes)"]
+        Servos["SG90 Micro Servos (Pan/Tilt 50Hz PWM)"]
+        Buttons["Tactile Button & Status LED (GPIO Interrupts)"]
+    end
+
+    subgraph Tier4 ["Tier 4: Companion Brain (LangGraph Multi-Supervisor)"]
+        RootSup["Root Supervisor (Intent Classifier)"]
         ConvSup["Conversation Supervisor"]
+        AutoSup["Automation Supervisor"]
+        ResSup["Research Supervisor"]
         FinSup["Finance Supervisor"]
         CommSup["Communication Supervisor"]
         VoxSup["Voice Supervisor"]
-        AutoSup["Automation Supervisor"]
-        ResSup["Research Supervisor"]
-        RootSup --> ConvSup
-        RootSup --> FinSup
-        RootSup --> CommSup
-        RootSup --> VoxSup
-        RootSup --> AutoSup
-        RootSup --> ResSup
+        SysNode["System Diagnostics Node"]
     end
 
-    subgraph SpecializedAgents ["Specialized Agent Execution Pipelines"]
-        AutoAgent["Automation Agent (Apps, Sites, Games)"]
-        MemAgent["Memory Agent (Recall & Store)"]
-        ConvAgent["Conversation Agent (Persona & Humor)"]
-        ResearchSquad["Web Research Squad (Scout -> Scraper -> Verifier -> Relevance)"]
-        DocAgent["Document Agent (PDF / Invoices)"]
-        DataAgent["Data Analyzer (Deterministic Math)"]
-        TextAgent["Texting Agent (Balance Notices)"]
-        TTSAgent["TTS Agent (Piper Speech Engine)"]
+    subgraph Tier5 ["Tier 5: 9-Agent Mixture of Agents (MoA) Subsystem"]
+        MoA_Intake["Context & Intake Agent"]
+        MoA_Decomp["Decomposition Agent"]
+        MoA_RAG["Isolated RAG Agent"]
+        MoA_Web["Temporal Web Search Agent"]
+        MoA_Risk["Risk & Constraint Agent"]
+        MoA_Plan["Strategic Planner Agent"]
+        MoA_SolvA["Primary Solver A (Comprehensive)"]
+        MoA_SolvB["Secondary Solver B (Concise)"]
+        MoA_Judge["Evaluator & Judge Agent (Critique Loop)"]
     end
 
-    subgraph MemoryAndStorage ["Dual-Layer Persistence & RL Memory"]
-        SQLiteDB[("SQLite Relational DB (Django ORM)")]
-        ChromaDB[("ChromaDB Vector Store (Collections)")]
-        RLRules["Reinforced Learned Rules Engine"]
+    subgraph Tier6 ["Tier 6: Web Crawling & Real-Time Intelligence Squad"]
+        ScoutAgent["Search Scout Agent (Bing + Direct RSS + Wiki)"]
+        ScraperAgent["Deep Scraper Agent (Trafilatura + Crawl4AI + BS4)"]
+        VerifierAgent["Fact Verifier Agent (Consensus Scoring)"]
+        RelevanceAgent["Relevance Analyzer Agent (Noise Filtering)"]
+        TemporalSvc["TemporalService (Deterministic Date/Time/Calendar)"]
     end
 
-    UI <-->|HTTP REST & WS| ASGI
-    Cam --> PrevCache
-    ESP <-->|Serial Packets| Serial
-    AutoSup --> AutoAgent
-    AutoAgent --> ConvAgent
-    ResSup --> ResearchSquad
-    ResearchSquad --> ConvAgent
-    ConvSup --> MemAgent --> ConvAgent
-    FinSup --> DocAgent --> DataAgent --> ConvAgent
-    CommSup --> DataAgent --> TextAgent
-    ConvAgent --> TTSAgent
-    MemAgent <--> SQLiteDB
-    MemAgent <--> ChromaDB
-    RLRules <--> SQLiteDB
-    RLRules <--> ChromaDB
+    subgraph Tier7 ["Tier 7: Hybrid Memory & Reinforcement Learning Layer"]
+        MemMgr["MemoryManager (High-Level Coordinator)"]
+        RL_Engine["Reinforced Rule Extractor & Injector"]
+        SQLite_DB[("SQLite Relational DB (Django ORM)")]
+        Chroma_DB[("ChromaDB Vector Store (Collections)")]
+        DistilBERT["DistilBERT Semantic Embeddings"]
+    end
+
+    subgraph Tier8 ["Tier 8: Desktop & Browser Automation Engine"]
+        AutoAgent["AutomationAgent (LangGraph Agent)"]
+        DeskCtrl["DesktopAutomationController (Apps & URLs)"]
+        GameCtrl["GameAutomationController (Anti-Burnout 2048)"]
+        MCP_Server["MOMO MCP Server (Model Context Protocol)"]
+    end
+
+    subgraph Tier9 ["Tier 9: Local LLM Runtime & Hardware Acceleration"]
+        OllamaClient["OllamaClient (Per-Request HTTPX Timeouts)"]
+        ModelMgr["ModelManager (Local GGUF Model Registry)"]
+        GPUMgr["GPUManager (CUDA Detection & CPU Fallback)"]
+        PromptBld["PromptBuilder (Persona + Telemetry + RL Rules)"]
+        RespParser["ResponseParser (Anti-JSON & Anti-Cutoff)"]
+    end
+
+    %% Inter-Tier Connections
+    Tier10 <-->|REST & WebSocket| Tier3
+    Webcam --> CamThread --> FaceDetector --> FacsArray --> RollAlign --> AttnTrack --> Proactive
+    CamThread --> Prev_Cache
+    FaceDetector --> FaceRecog
+    Tier3 <-->|Serial USB-C| Tier1
+    ESP32 --> OLED
+    ESP32 --> Servos
+    ESP32 --> Buttons
+    Tier3 <--> Tier4
+    Tier4 --> Tier8
+    Tier4 --> Tier6
+    Tier4 --> Tier5
+    Tier4 <--> Tier7
+    Tier4 --> Tier9
+    Tier8 --> DeskCtrl
+    Tier8 --> GameCtrl
+    Tier8 --> MCP_Server
+    Tier6 --> ScoutAgent --> ScraperAgent --> VerifierAgent --> RelevanceAgent
+    Tier6 <--> TemporalSvc
+    Tier5 --> MoA_Intake --> MoA_Decomp --> MoA_Plan --> MoA_Judge
+    Tier7 --> MemMgr --> SQLite_DB
+    MemMgr --> Chroma_DB
+    MemMgr <--> DistilBERT
+    MemMgr <--> RL_Engine
+    Tier9 --> PromptBld --> OllamaClient --> RespParser
+    GPUMgr --> OllamaClient
 ```
 
 ---
 
-### 2. LangGraph Multi-Supervisor Routing Diagram
+### Tier 1: Physical Hardware & Embedded Firmware Layer (ESP32)
+
+The physical body of MOMO is driven by an **ESP32-WROOM-32** dual-core microcontroller clocked at 240 MHz with 520 KB SRAM.
+
+```mermaid
+flowchart LR
+    subgraph HostPC ["Host Laptop"]
+        USB["USB-C Port"]
+    end
+
+    subgraph ESP32Core ["ESP32 Companion Controller"]
+        UART["CP2102 / CH340 USB-UART (115200 baud)"]
+        FreeRTOS["FreeRTOS Firmware Loop (PlatformIO C++)"]
+        LEDC["LEDC Hardware PWM Controller"]
+        I2C_Master["Hardware I2C Master (400 kHz)"]
+        GPIO["Digital GPIO Matrix (Debounced)"]
+    end
+
+    subgraph Peripherals ["Physical Hardware Body"]
+        OLED_Disp["SSD1306 0.96'' OLED (128x64, 0x3C)"]
+        PanServo["SG90 Pan Servo (Yaw: 0° - 180°, Pin 13)"]
+        TiltServo["SG90 Tilt Servo (Pitch: 45° - 135°, Pin 12)"]
+        Btn["Pushbutton (Pin 4)"]
+        LED["Status LED (Pin 2)"]
+    end
+
+    USB <-->|Framed JSON Packets| UART
+    UART <--> FreeRTOS
+    FreeRTOS --> I2C_Master --> OLED_Disp
+    FreeRTOS --> LEDC --> PanServo
+    FreeRTOS --> LEDC --> TiltServo
+    GPIO <--> Btn
+    FreeRTOS --> GPIO --> LED
+```
+
+- **Firmware Engine (`hardware/esp32/src/main.cpp`)**:
+  - Implements a non-blocking FreeRTOS task architecture with strict frame-boundary serial buffering.
+  - Receives JSON commands from the host laptop (`{"cmd": "expr", "name": "happy"}`, `{"cmd": "servo", "pan": 90, "tilt": 100}`).
+  - Emits telemetry packets (`{"type": "telemetry", "btn": 0, "uptime": 124500}`).
+- **OLED Vector Eye Renderer (`SSD1306`)**:
+  - Renders 13 dynamic emotional states: `normal`, `happy`, `thinking`, `confused`, `sleepy`, `excited`, `sad`, `angry`, `surprised`, `proud`, `embarrassed`, `tired`, `stressed`.
+  - Simulates natural human micro-expressions: procedural blinking with randomized 2-6 second intervals, pupil saccades, and squints.
+- **Micro Servo Head Articulation (`SG90`)**:
+  - 50 Hz PWM control (20ms period, 0.5ms to 2.5ms duty cycle) via ESP32 `ledc` peripheral.
+  - Smooth trigonometric acceleration curves prevent mechanical servo chatter and simulate organic head gestures: nodding in agreement, tilting curiously, celebrating, and waving.
+
+---
+
+### Tier 2: Sensory Perception & Computer Vision Layer
+
+Located in [`Backend/vision/`](file:///c:/Users/darshini/Desktop/MOMO/Backend/vision/), this tier processes live video frames from the webcam.
 
 ```mermaid
 flowchart TD
-    Start([START]) --> Root["Root Supervisor"]
+    RawFrame["Camera Hardware (OpenCV VideoCapture)"] --> CamWorker["CameraManager Worker Thread"]
     
-    Root -->|chat / dialogue / questions| ConvSup["Conversation Supervisor"]
-    Root -->|open apps / websites / play games| AutoSup["Automation Supervisor"]
-    Root -->|crawl / news / search web / research| ResSup["Research Supervisor"]
-    Root -->|invoice / billing / balance| FinSup["Finance Supervisor"]
-    Root -->|message drafting / reminders| CommSup["Communication Supervisor"]
-    Root -->|audio speech input| VoxSup["Voice Supervisor"]
-    Root -->|hardware test / diagnostics| SysNode["System Diagnostics Node"]
+    subgraph AcquisitionLoop ["High-Throughput Acquisition (<33ms Native 30 FPS)"]
+        CamWorker --> FrameBuffer["Lock-Free Atomic Frame Buffer"]
+        FrameBuffer --> JPEGCache["Atomic JPEG Preview Cache (_last_preview_jpeg_bytes, 100ms TTL)"]
+    end
 
-    AutoSup --> AutoAgent["Automation Agent"]
-    AutoAgent --> ConvAgent["Conversation Agent (Fast-Path Confirmation)"]
+    FrameBuffer --> FaceDetect["YuNet ONNX Deep Learning Face Detector"]
 
-    ResSup --> SearchScout["Search Scout Agent"]
-    SearchScout --> DeepScraper["Deep Scraper Agent"]
-    DeepScraper --> FactVerifier["Fact Verifier Agent"]
-    FactVerifier --> RelevanceAnalyzer["Relevance Analyzer Agent"]
-    RelevanceAnalyzer --> ConvAgent
+    subgraph LandmarkAndFACS ["Geometric Calibration & FACS Array"]
+        FaceDetect --> RollVector["Ocular Roll Vector Calculation (Ux, Uy)"]
+        RollVector --> TransformSpace["Roll-Aligned 2D Coordinate Transformation"]
+        TransformSpace --> LipCrease["Lip Slit Crease Curvature Calculation"]
+        LipCrease --> FACS18["18-Sensor FACS Action Unit Estimator"]
+    end
 
-    ConvSup --> MemAgent["Memory Agent (RL Rules & Facts)"]
+    subgraph PerceptionPipelines ["Parallel Perception Engines"]
+        TransformSpace --> AttentionEngine["AttentionTracker (EAR + Eye Tracking)"]
+        AttentionEngine --> FatigueEngine["ProactiveMonitor (Continuous Work & Posture)"]
+        FaceDetect --> IdentityEngine["FaceRecognizer (SFace 128D Embeddings)"]
+    end
+
+    LipCrease --> CleanEmotion["Calibrated Emotion (Neutral / Focused: 85% Conf)"]
+    FatigueEngine --> FatigueSignal["Fatigue Alert (Suggest Rest / Game)"]
+    IdentityEngine --> KnownUser["User Identification (face_profiles.json)"]
+    JPEGCache --> PreviewAPI["GET /api/vision/preview/ (<1ms Latency)"]
+```
+
+- **Camera Pipeline (`camera.py`)**:
+  - Background acquisition worker thread grabs frames continuously without artificial sleep delays, maintaining native 30 FPS hardware capture.
+- **Ocular-Roll Aligned Geometry (`expression_detector.py`)**:
+  - Determines face tilt angle $\theta = \text{atan2}(R_y - L_y, R_x - L_x)$.
+  - Normalizes 7 upper/lower lip landmarks into roll-invariant coordinates.
+  - Calculates smile metric: $M = \frac{Y_{\text{center}} - (Y_{\text{left}} + Y_{\text{right}})/2}{\text{eye\_distance}}$.
+  - Resting mouth ratio is negative ($-0.255$), correctly identifying neutral focus without false smile positives.
+- **Attention & Fatigue Tracking (`attention.py`, `proactive_monitor.py`)**:
+  - Computes Eye Aspect Ratio ($\text{EAR} = \frac{\|p_2 - p_6\| + \|p_3 - p_5\|}{2\|p_1 - p_4\|}$) to track blinks and drowsy micro-sleeps.
+  - Monitors session duration (>30 mins) and triggers gentle motivational breaks.
+- **Face Recognition (`face_recognizer.py`)**:
+  - Generates 128-dimensional L2-normalized embeddings via SFace ONNX model and compares against stored user profiles in `face_profiles.json`.
+
+---
+
+### Tier 3: Gateway, Networking & Transport Layer
+
+Coordinates communication between the React frontend, host operating system, ESP32 companion, and backend agents.
+
+- **ASGI Web Server (Django 5.x + Channels + Daphne)**:
+  - Supports synchronous and asynchronous REST endpoints and persistent WebSocket connections.
+- **High-Performance Endpoints (`Backend/api/views.py`)**:
+  - `/api/vision/preview/`: Delivers live annotated camera frames from the 100ms JPEG cache in `<1ms`.
+  - `/api/chat/`: Invokes the LangGraph `momo_graph` state machine with user inputs, returning assistant response, OLED expression, servo animation, and TTS flags.
+  - `/api/workflow/execute/`: Runs the 9-agent Mixture of Agents research workflow.
+  - `/api/automation/`: Triggers desktop application launches and mindful break games.
+- **WebSocket Gateway (`/ws/momo/`)**:
+  - Provides real-time bidirectional telemetry streaming: live emotional state, vision tracking metrics, ESP32 servo telemetry, and audio payloads.
+- **USB-C Serial Bridge (`Backend/iot/serial_bridge.py`)**:
+  - Scans COM ports for CP210x / CH340 devices.
+  - Performs structured handshakes, auto-reconnects upon physical cable disconnect, and validates all servo angles against hardware allowlists.
+
+---
+
+### Tier 4: Companion Brain (LangGraph Multi-Supervisor Orchestration)
+
+The Companion Brain (`Backend/graph/graph.py`) orchestrates multi-modal interaction using a LangGraph `StateGraph(MomoState)`.
+
+```mermaid
+flowchart TD
+    Start([START]) --> Root["Root Supervisor (Regex & Semantic Classifier)"]
+
+    Root -->|intent = automation| AutoSup["Automation Supervisor"]
+    Root -->|intent = research / crawl| ResSup["Research Supervisor"]
+    Root -->|intent = conversation / chat| ConvSup["Conversation Supervisor"]
+    Root -->|intent = invoice / finance| FinSup["Finance Supervisor"]
+    Root -->|intent = draft message| CommSup["Communication Supervisor"]
+    Root -->|intent = voice speech| VoxSup["Voice Supervisor"]
+    Root -->|intent = hardware diagnostics| SysNode["System Diagnostics Node"]
+
+    AutoSup --> AutoAgent["Automation Agent (Apps, Sites, Games)"]
+    AutoAgent --> ConvAgent["Conversation Agent (Fast 5s Confirmation Path)"]
+
+    ResSup --> ScoutAgent["Search Scout Agent"]
+    ScoutAgent --> ScraperAgent["Deep Scraper Agent"]
+    ScraperAgent --> VerifierAgent["Fact Verifier Agent"]
+    VerifierAgent --> RelevanceAgent["Relevance Analyzer Agent"]
+    RelevanceAgent --> ConvAgent
+
+    ConvSup --> MemAgent["Memory Agent (RL Facts & Rules)"]
     MemAgent --> ConvAgent
 
-    FinSup --> DocAgent["Document Agent (PDF/OCR)"]
+    FinSup --> DocAgent["Document Agent (PDF / OCR)"]
     FinSup --> RetAgent["Retrieval Agent (ChromaDB)"]
-    DocAgent --> DataAgent["Data Analyzer Agent"]
+    DocAgent --> DataAgent["Data Analyzer Agent (Deterministic Math)"]
     RetAgent --> DataAgent
     DataAgent --> ConvAgent
 
     CommSup --> DataAgent
     DataAgent --> TextAgent["Texting Agent"]
 
-    VoxSup --> STTAgent["STT Agent (Local Whisper)"]
+    VoxSup --> STTAgent["STT Agent (Whisper)"]
     STTAgent --> ConvSup
 
-    ConvAgent -->|voice enabled| TTSAgent["TTS Agent (Piper TTS)"]
-    ConvAgent -->|text only| End([END])
-    TextAgent -->|voice enabled| TTSAgent
-    TextAgent -->|text only| End
+    ConvAgent -->|speak = true| TTSAgent["TTS Agent (Piper TTS)"]
+    ConvAgent -->|speak = false| End([END])
+    TextAgent -->|speak = true| TTSAgent
+    TextAgent -->|speak = false| End
     TTSAgent --> End
     SysNode --> End
 ```
 
+- **Root Supervisor (`supervisors/root.py`)**:
+  - Analyzes prompt syntax, intent keywords, and state metadata.
+  - Dispatches to specialized supervisors without costly LLM round-trips.
+- **Shared Pydantic State (`graph/state.py`)**:
+  - `MomoState` maintains conversation history, active user identity, detected vision emotions, financial balance insights, retrieved chunks, supervisor routing decisions, and hardware command queues.
+  - Merged deterministically via custom reducers.
+- **Conversation Agent (`agents/conversation_agent.py`)**:
+  - Assembles contextual prompts combining persona guidelines, active application context, vision telemetry, learned rules, and temporal anchors.
+  - Implements fast-path generation for desktop automation actions (`timeout=5s`, `predict_tokens=48`) and anti-hallucination overrides for live news.
+
 ---
 
-### 3. Multi-Agent Web Research Squad Workflow
+### Tier 5: 9-Agent Mixture of Agents (MoA) Reasoning Subsystem
+
+Located in [`Backend/ai_workflow/`](file:///c:/Users/darshini/Desktop/MOMO/Backend/ai_workflow/), this autonomous reasoning engine handles complex, multi-layered research tasks using a 9-agent DAG with parallel fan-out and synchronized fan-in merges:
 
 ```mermaid
 flowchart TD
-    UserQuery["User Research Query (e.g. 'tell me its latest news with the date and time')"] --> ResearchSup["Research Supervisor"]
-    ResearchSup --> SearchScout["1. Search Scout Agent"]
+    Start([START]) --> Context["1. Intake & Context Agent"]
+    Context -->|normalize input| Decomp["2. Decomposition Agent"]
 
-    subgraph MultiAngleScouting ["Scouting & Discovery Layer"]
-        SearchScout --> CleanQuery["expand_query (Noise Stripping)"]
-        SearchScout --> DirectRSS["Direct National RSS Feeds (The Hindu, Indian Express, NDTV, TOI)"]
-        SearchScout --> BingLive["Bing Live Search API"]
-        SearchScout --> WikiAPI["Wikipedia OpenSearch / On This Day API"]
-        SearchScout --> DirectDomain["Direct Domain Resolver (e.g. python.org, wikipedia.org)"]
+    subgraph FanOutGathering ["Parallel Information Gathering (Fan-Out)"]
+        Decomp --> RAG["3. Isolated RAG Agent (Tenant Vector Docs)"]
+        Decomp --> WebSearch["4. Temporal Web Search & Crawler Agent"]
+        Decomp --> Risk["5. Risk & Constraint Agent"]
     end
 
-    MultiAngleScouting --> URLDedup["URL Deduplication & Candidate Assembly"]
-    URLDedup --> DeepScraper["2. Deep Scraper Agent"]
+    RAG --> Plan["6. Strategic Planner Agent (Synchronized Fan-In)"]
+    WebSearch --> Plan
+    Risk --> Plan
 
-    subgraph ExtractionHierarchy ["4-Tier Extraction Hierarchy"]
-        DeepScraper --> Trafilatura["Tier 1: Trafilatura (High-Fidelity Text)"]
-        DeepScraper --> Readability["Tier 2: Readability-lxml (Article Body Scoring)"]
-        DeepScraper --> Crawl4AI["Tier 3: Crawl4AI (Async Dynamic JS Renderer)"]
-        DeepScraper --> BS4["Tier 4: BeautifulSoup Semantic Paragraph Parsing"]
+    subgraph FanOutSolvers ["Parallel Mixture of Agents Solvers (Fan-Out)"]
+        Plan --> SolverA["7. Primary Solver A (Comprehensive Draft)"]
+        Plan --> SolverB["8. Secondary Solver B (Concise & Focused Draft)"]
     end
 
-    ExtractionHierarchy --> FactVerifier["3. Fact Verifier Agent"]
-    FactVerifier --> ConsensusScore["Consensus Scoring & Contradiction Filtration"]
-    ConsensusScore --> RelevanceAnalyzer["4. Relevance Analyzer Agent"]
+    SolverA --> Judge["9. Evaluator & Judge Agent (Cross-Examination Fan-In)"]
+    SolverB --> Judge
 
-    subgraph RelevanceScoring ["Relevance Scoring & Synthesis"]
-        RelevanceAnalyzer --> CleanNoise["Boilerplate & Paywall Filter"]
-        RelevanceAnalyzer --> DensityScore["Keyword Density & Temporal Matching"]
-        RelevanceAnalyzer --> TopPassages["Top 4 Verified Passages"]
+    Judge -->|confidence >= 0.80| FinalSuccess["Finalize Success Node"]
+    Judge -->|critique / retry needed| RetryNode["Retry Prep Node (Increment Counter)"]
+    Judge -->|retries >= 3| FinalExhaust["Finalize Exhausted Node"]
+
+    RetryNode -->|feedback injection| Plan
+    FinalSuccess --> End([END])
+    FinalExhaust --> End
+```
+
+| Agent | Responsibility | Core Implementation |
+|:---|:---|:---|
+| **1. Context Agent** | Input validation, prompt normalization, tenant security validation | Extracts parameters, isolates workspace boundaries |
+| **2. Decomposition Agent** | Breaks complex goals into ordered sub-goals and dependency trees | Deconstructs multi-part queries |
+| **3. Isolated RAG Agent** | Semantic retrieval from isolated tenant ChromaDB collections | Bounded vector search without cross-tenant leakage |
+| **4. Temporal Web Search** | Real-time web discovery with deterministic date/time anchors | Queries live RSS news feeds and Wikipedia APIs |
+| **5. Risk & Constraint** | Identifies compliance boundaries, hallucination risks, and safety bounds | Formulates guardrail directives |
+| **6. Strategic Planner** | Synthesizes RAG context, web intelligence, and risk boundaries | Generates unified execution directives |
+| **7. Primary Solver (A)** | Detailed, exhaustive candidate response with full citations | High-recall generation branch |
+| **8. Secondary Solver (B)** | Direct, concise alternative formulation focusing on precision | High-precision generation branch |
+| **9. Evaluator & Judge** | Cross-examines Solvers A & B, scores confidence, validates claims | Synthesizes final response or requests plan revisions |
+
+---
+
+### Tier 6: Web Crawling & Real-Time Intelligence Squad
+
+Solves the LLM knowledge-cutoff limitation without requiring cloud API subscriptions:
+
+```mermaid
+flowchart TD
+    UserQuery["User Prompt (e.g. 'tell me its latest news with the date and time')"] --> Scout["1. Search Scout Agent"]
+    
+    subgraph MultiSourceScout ["Scouting & Discovery"]
+        Scout --> QueryExp["expand_query (Strip Wrappers & Noise)"]
+        Scout --> DirectFeeds["Direct National RSS Feeds (The Hindu, Indian Express, NDTV, TOI)"]
+        Scout --> BingAPI["Bing Live Search Engine"]
+        Scout --> WikiAPI["Wikipedia OpenSearch / Holidays API"]
+        Scout --> DirectURL["Direct Domain Routing (e.g. python.org, wikipedia.org)"]
     end
 
-    TopPassages --> ConvAgent["Conversation Agent"]
-    ConvAgent --> TemporalPrepend["Deterministic Temporal Anchor Prepend (Sunday, September 13, 2026)"]
-    TemporalPrepend --> FinalAnswer["Articulate Grounded Answer in MOMO's Voice"]
+    MultiSourceScout --> Dedup["URL Deduplication & Candidate Assembly"]
+    Dedup --> Scraper["2. Deep Scraper Agent"]
+
+    subgraph MultiTierScraper ["4-Tier High-Density Extraction Hierarchy"]
+        Scraper --> T1["Tier 1: Trafilatura (Clean Body Text Extraction)"]
+        Scraper --> T2["Tier 2: Readability-lxml (Document Scoring)"]
+        Scraper --> T3["Tier 3: Crawl4AI (Async JavaScript Headless Crawler)"]
+        Scraper --> T4["Tier 4: BeautifulSoup4 (Semantic Paragraph Parsing)"]
+    end
+
+    MultiTierScraper --> Verifier["3. Fact Verifier Agent"]
+    Verifier --> FactScoring["Consensus Scoring & Contradiction Filtration"]
+    FactScoring --> Relevance["4. Relevance Analyzer Agent"]
+
+    subgraph RelevanceSelection ["Relevance & Noise Filtration"]
+        Relevance --> StripBoilerplate["Remove Paywalls, Cookie Notices & Ads"]
+        Relevance --> KeywordDensity["Keyword Density & Temporal Matching"]
+        Relevance --> KeyBulletPassages["Top 4 Relevant Passages"]
+    end
+
+    KeyBulletPassages --> LLMConv["Conversation Agent"]
+    LLMConv --> DatePrepend["Deterministic Date/Time Prepend (Today is Sunday, September 13, 2026)"]
+    DatePrepend --> UserResponse["Verified Grounded Response to User"]
+```
+
+- **Direct RSS Feeds**: Bypasses search engine redirect wrappers by pulling full journalistic RSS feeds directly from The Hindu, Indian Express, NDTV, and Times of India, dated today (**Sunday, September 13, 2026**).
+- **Deterministic Temporal Grounding (`TemporalService`)**: Computes exact target dates in `Asia/Kolkata` timezone. Includes national and global observances (e.g., International Programmers' Day on September 13, the 256th day of the year).
+
+---
+
+### Tier 7: Hybrid Memory & Reinforcement Learning Layer
+
+MOMO maintains a unified dual-layer memory system combining relational ACID persistence with dense vector similarity search:
+
+```mermaid
+flowchart TD
+    UserTurn["User Turn Input / Reinforcement Directive"] --> MemMgr["MemoryManager"]
+
+    subgraph PatternDetection ["Reinforcement Learning Extraction"]
+        MemMgr --> RLPats{"Matches Reinforcement Patterns? ('Remember that...', 'Learn that...', 'I prefer...')"}
+        RLPats -->|yes: extract rule / preference| StoreRL["Extract Rule String & Confidence (1.0)"]
+        RLPats -->|no: standard conversational turn| StoreChat["Standard Conversation Log"]
+    end
+
+    subgraph Layer1_Relational ["Layer 1: Relational SQLite Store (Django ORM)"]
+        StoreRL --> DB_Facts["MemoryItem (fact_type='rule' | 'preference' | 'identity')"]
+        StoreRL --> DB_Prefs["UserPreference (key='backend_language', value='Python')"]
+        StoreChat --> DB_Logs["MessageLog (Full Turn Transcript)"]
+    end
+
+    subgraph Layer2_Vector ["Layer 2: Semantic Vector Store (ChromaDB Persistent)"]
+        StoreRL --> DistilBERT_Embed["DistilBERT Dense Vector Embedder"]
+        StoreChat --> DistilBERT_Embed
+        DistilBERT_Embed --> Coll_Saved[("Collection: momo_saved_memories")]
+        DistilBERT_Embed --> Coll_Chats[("Collection: momo_chat_history")]
+    end
+
+    subgraph HybridRecallPipeline ["Bi-Directional Recall & Prompt Injection"]
+        UserQuery["Next User Turn (e.g. 'What is my project name?')"] --> RecallQuery["MemoryManager.get_active_reinforced_rules()"]
+        DB_Facts --> RecallQuery
+        Coll_Saved --> RecallQuery
+        RecallQuery --> PromptInjection["[ACTIVE REINFORCED RULES LEARNED FROM USER]:\n- Learned rule: My project name is MOMO Robot\n- Learned rule: I prefer Python for backend coding"]
+        PromptInjection --> LLMContext["PromptBuilder System Prompt Context"]
+    end
+```
+
+- **Reinforcement Learning Pattern Matching**:
+  - Regex patterns identify user teachings (`"Remember that..."`, `"Learn that..."`, `"From now on..."`, `"My project name is..."`, `"I prefer..."`).
+  - Stored with `fact_type="rule"`, `confidence=1.0`, `source="reinforcement_learning"`.
+- **System Prompt Conditioning**:
+  - Dynamic injection of learned rules under `[ACTIVE REINFORCED RULES LEARNED FROM USER]` conditions the LLM to adhere to all past user directives.
+- **Bi-Directional Recall**:
+  - Merges SQLite exact keyword matches with ChromaDB cosine similarity matches for comprehensive memory recall.
+
+---
+
+### Tier 8: Desktop & Browser Automation Engine
+
+Executes desktop actions on the host machine:
+
+- **Universal Desktop Controller (`Backend/automation/desktop_controller.py`)**:
+  - Opens web platforms (Instagram, YouTube, Google, GitHub, Twitter/X, Reddit, WhatsApp Web, LinkedIn, Netflix) in the user's default browser.
+  - Launches Windows desktop tools (`notepad.exe`, `calc.exe`, `wt.exe`).
+  - Dry-Run Safety: Setting `MOMO_AUTOMATION_DRY_RUN=1` allows automated test suites to verify routing and LLM generation without opening dozens of windows.
+- **Game Automation Controller (`Backend/automation/game_controller.py`)**:
+  - Mindful break launcher for anti-burnout recovery (2048, Pacman, Wordle, Little Alchemy).
+- **MOMO MCP Server (`Backend/automation/momo_mcp_server.py`)**:
+  - Implements the Model Context Protocol (MCP) standard, exposing automation tools (`momo_open_website`, `momo_launch_app`, `momo_launch_game`, `momo_web_crawl`) to external agent runtimes.
+
+---
+
+### Tier 9: Local LLM Runtime & Hardware Acceleration
+
+- **Ollama Client (`Backend/ai/ollama_client.py`)**:
+  - Native asynchronous HTTP client communicating with Ollama on port `11434`.
+  - **Per-Request Timeouts**: Uses per-request timeouts on `client.post(..., timeout=req_timeout)` rather than singleton client timeouts, allowing fast 5s automation paths without prematurely terminating complex 30-60s CPU inferences.
+  - **Keep-Alive**: Keeps models memory-resident (`keep_alive: 60m`) for sub-second subsequent responses.
+- **Prompt Builder (`Backend/ai/prompt_builder.py`)**:
+  - Combines MOMO persona guidelines, FACS emotion telemetry, active application context, learned reinforcement rules, and deterministic temporal anchors into an assembled prompt.
+- **Response Parser (`Backend/ai/response_parser.py`)**:
+  - Multi-layer regex sanitizer that extracts clean messages, avatar expressions, and servo animations while eliminating raw JSON brackets and AI cutoff excuses.
+
+---
+
+### Tier 10: Frontend Client & Interactive UI Layer (React 18 + Vite + TS)
+
+Built with React 18, Vite, TypeScript, and Tailwind CSS in [`Frontend/src/`](file:///c:/Users/darshini/Desktop/MOMO/Frontend/src/):
+
+- **`MomoAvatar`**: Interactive SVG/Canvas companion displaying animated OLED vector eyes, emotional facial expressions, and talking mouth shapes synced to TTS audio.
+- **`VisionCard`**: Real-time webcam preview with an attention meter, 18-sensor FACS Action Unit telemetry badge, and fatigue alerts.
+- **`ChatWindow`**: Streaming multi-turn conversation interface with Markdown formatting, syntax-highlighted code blocks, quick-action chips, and voice input.
+- **`Esp32Card`**: Hardware companion monitor showing USB-C connection status, firmware heartbeat latency, and manual servo pan/tilt controls.
+- **`DocumentUploader` & `InvoiceCard`**: Multi-format document ingestion interface with deterministic balance-due calculation cards.
+- **`WorkflowDashboard`**: Visual execution graph inspector for the 9-agent Mixture of Agents workflow.
+
+---
+
+## 🔄 Life of a User Request (End-to-End Data Flow)
+
+To illustrate how all 10 tiers collaborate, here is the complete trace of a user request:
+
+### Example: *"tell me its latest news with the date and time"*
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Frontend as Tier 10: React UI (ChatWindow / VisionCard)
+    participant Gateway as Tier 3: Django ASGI Gateway (/api/chat/)
+    participant Vision as Tier 2: Computer Vision (Camera & FACS)
+    participant LangGraph as Tier 4: LangGraph Brain (Root Supervisor)
+    participant Research as Tier 6: Web Research Squad
+    participant Temporal as Tier 6: TemporalService
+    participant Memory as Tier 7: Hybrid Memory (SQLite + ChromaDB)
+    participant LLM as Tier 9: Ollama LLM Runtime
+    participant Hardware as Tier 1: ESP32 Robot (OLED & Servos)
+
+    User->>Frontend: Types "tell me its latest news with the date and time"
+    Vision->>Frontend: Continuous frame perception (neutral focus, EAR=0.31, roll-aligned)
+    Frontend->>Gateway: POST /api/chat/ {message, vision_state, session_id}
+    Gateway->>LangGraph: momo_graph.ainvoke(MomoState)
+    LangGraph->>LangGraph: RootSupervisor.evaluate_route() -> routes to "research"
+    LangGraph->>Research: ResearchSupervisor -> SearchScoutAgent
+    Research->>Temporal: get_temporal_anchor()
+    Temporal-->>Research: Date=2026-09-13, Day=Sunday, Time=06:00 PM, TZ=Asia/Kolkata
+    Research->>Research: SearchScout pulls live RSS feeds (The Hindu, Indian Express, NDTV)
+    Research->>Research: DeepScraper extracts article body via Trafilatura / Readability
+    Research->>Research: FactVerifier validates source credibility & consensus
+    Research->>Research: RelevanceAnalyzer filters boilerplate & extracts key facts
+    Research->>LangGraph: Updates retrieved_context with verified headlines
+    LangGraph->>Memory: Recall active reinforced rules & user preferences
+    Memory-->>LangGraph: Returns learned rules (project name, coding preference)
+    LangGraph->>LLM: ConversationAgent calls OllamaClient.chat() with temporal grounding prompt
+    LLM-->>LangGraph: Raw completion received
+    LangGraph->>LangGraph: ResponseParser cleans text & prepends deterministic date/time anchor
+    LangGraph->>Gateway: Returns MomoResponse (message, expression="thinking", animation="nod")
+    Gateway->>Hardware: Serial packet: {"cmd": "expr", "name": "thinking"}, {"cmd": "servo", "tilt": 105}
+    Hardware->>Hardware: OLED renders thinking eyes; SG90 tilt servo performs gentle nod
+    Gateway-->>Frontend: JSON response with verified headlines & today's date/time
+    Frontend-->>User: Displays clean grounded news with animated avatar response
 ```
 
 ---
 
 ## 🧪 Comprehensive 30-Command Dual-Pass Verification Suite
 
-To guarantee stability, performance, and correctness, MOMO features a dual-pass verification runner ([`Backend/tests/test_30_commands_suite.py`](file:///c:/Users/darshini/Desktop/MOMO/Backend/tests/test_30_commands_suite.py)) that executes 30 diverse commands across Automation, Web Crawling, and LLM / Reinforcement twice (60 executions total).
+MOMO includes an automated verification runner ([`Backend/tests/test_30_commands_suite.py`](file:///c:/Users/darshini/Desktop/MOMO/Backend/tests/test_30_commands_suite.py)) that executes 30 diverse commands twice in succession (60 executions total):
 
 ### Verification Results Summary
 
@@ -336,7 +679,7 @@ MOMO/
 
 ---
 
-## ⚡ Quickstart & Usage
+## ⚡ Quickstart & Operation Guide
 
 ### 1. Launch MOMO Full-Stack (One-Click)
 Double-click `start_momo.bat` from the root folder.

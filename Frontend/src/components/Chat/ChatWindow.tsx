@@ -199,6 +199,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState<boolean>(voiceEngine.isVoiceEnabled());
   const [activeSpokenId, setActiveSpokenId] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState<boolean>(false);
+  const [recError, setRecError] = useState<string | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -207,8 +209,41 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const unsub = voiceEngine.onSpeakingChange((speaking) => {
       if (!speaking) setActiveSpokenId(null);
     });
-    return unsub;
+    return () => {
+      unsub();
+      voiceEngine.stopListening();
+    };
   }, []);
+
+  const toggleListening = () => {
+    if (isListening) {
+      voiceEngine.stopListening();
+      setIsListening(false);
+      return;
+    }
+
+    setRecError(null);
+    const started = voiceEngine.startListening(
+      (transcript) => {
+        setInput(transcript);
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+          textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`;
+        }
+      },
+      (err) => {
+        setRecError(err);
+        setIsListening(false);
+        setTimeout(() => setRecError(null), 4000);
+      },
+      () => {
+        setIsListening(false);
+      }
+    );
+    if (started) {
+      setIsListening(true);
+    }
+  };
 
   // Automatic scrolling strictly inside the chatbot container (never scrolls full window or app)
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
@@ -456,6 +491,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Input Box */}
       <div className="p-3 bg-slate-800/80 border-t border-slate-700/80">
+        {recError && (
+          <div className="mb-2 px-3 py-1.5 rounded-lg bg-amber-950/80 border border-amber-800 text-amber-300 text-xs font-mono flex items-center justify-between">
+            <span>⚠️ {recError}</span>
+            <button onClick={() => setRecError(null)} className="text-amber-400 hover:text-white ml-2 cursor-pointer">✕</button>
+          </div>
+        )}
         <div className="flex gap-2 items-end">
           <textarea
             ref={textareaRef}
@@ -467,10 +508,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             disabled={isThinking}
             className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all resize-none max-h-40"
           />
+          {/* Voice Recognition Microphone Button */}
+          <button
+            type="button"
+            onClick={toggleListening}
+            title={isListening ? "Stop voice listening" : "Speak to MOMO (Voice Recognition)"}
+            disabled={isThinking}
+            className={`px-3 py-2.5 rounded-xl border transition-all flex items-center justify-center gap-1.5 text-sm font-semibold cursor-pointer shadow-md ${
+              isListening
+                ? 'bg-rose-600 hover:bg-rose-500 border-rose-500 text-white animate-pulse shadow-rose-900/50'
+                : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 hover:text-white'
+            }`}
+          >
+            <span>{isListening ? '🛑' : '🎙️'}</span>
+            {isListening && <span className="text-xs font-mono font-medium hidden sm:inline">Listening...</span>}
+          </button>
           <button
             onClick={handleSend}
             disabled={!input.trim() || isThinking}
-            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white text-sm font-semibold rounded-xl transition-all shadow-md shadow-emerald-900/40 flex items-center gap-1.5"
+            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white text-sm font-semibold rounded-xl transition-all shadow-md shadow-emerald-900/40 flex items-center gap-1.5 cursor-pointer"
           >
             <span>Send</span>
             <span>↵</span>

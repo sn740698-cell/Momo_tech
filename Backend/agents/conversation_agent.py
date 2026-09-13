@@ -109,7 +109,7 @@ class ConversationAgent:
 
         if needs_crawl:
             try:
-                crawler = LiveWebCrawlerService(timeout_seconds=15.0)
+                crawler = LiveWebCrawlerService(timeout_seconds=8.0)
                 clean_q = last_user_msg
                 for pfx in ["what happened with", "what happened in", "what happened", "what is happening with", "web crawl", "crawl", "tell me its latest news with the date and time", "tell me latest news"]:
                     clean_q = re.sub(re.escape(pfx), "", clean_q, flags=re.IGNORECASE)

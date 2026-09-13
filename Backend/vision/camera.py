@@ -66,6 +66,11 @@ class CameraManager:
                 try:
                     cap = cv2.VideoCapture(self.camera_index, backend)
                     if cap.isOpened():
+                        # Set buffer size to 1 to discard stale backlog frames (eliminates lag & buffer striking on Windows DirectShow/MSMF)
+                        try:
+                            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                        except Exception:
+                            pass
                         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
                         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
                         cap.set(cv2.CAP_PROP_FPS, 30)

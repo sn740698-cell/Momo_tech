@@ -21,7 +21,7 @@ class SearchScoutAgent:
     """
 
     def __init__(self, crawler_service: Optional[LiveWebCrawlerService] = None):
-        self.crawler = crawler_service or LiveWebCrawlerService(timeout_seconds=12.0)
+        self.crawler = crawler_service or LiveWebCrawlerService(timeout_seconds=8.0)
 
     async def run(self, state: MomoState) -> Dict[str, Any]:
         last_user_msg = ""

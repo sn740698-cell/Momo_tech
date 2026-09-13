@@ -72,10 +72,12 @@ class ExpressionDetector:
         self._frames_since_detection: int = 999
         self._prev_face_gray: Optional[np.ndarray] = None
 
-        # In-memory annotation caching to avoid redundant heavy detector runs
+        # In-memory annotation & analysis caching to avoid redundant heavy detector runs
+        self._last_analysis_time: float = 0.0
+        self._analysis_cache_ttl: float = 0.15  # 150ms TTL for heavy ONNX detector (~6-7 FPS detection cadence)
         self._last_annotated_frame: Optional[np.ndarray] = None
         self._last_annotated_time: float = 0.0
-        self._annotated_cache_ttl: float = 0.033  # 33ms TTL (30 FPS smooth real-time streaming)
+        self._annotated_cache_ttl: float = 0.025  # 25ms TTL (allows up to 40 FPS streaming)
 
     def _init_detector(self):
         if os.path.exists(self.model_path) and os.path.getsize(self.model_path) > 10000:
@@ -1110,7 +1112,14 @@ class ExpressionDetector:
         annotated = frame.copy()
         h, w = annotated.shape[:2]
 
-        data = analysis or self.analyze_frame(annotated)
+        if analysis is not None:
+            data = analysis
+        elif (now - self._last_analysis_time < self._analysis_cache_ttl) and self._last_analysis.get("face_detected") is not None:
+            data = self._last_analysis
+        else:
+            data = self.analyze_frame(annotated)
+            self._last_analysis = data
+            self._last_analysis_time = now
         face_detected = data.get("face_detected", False)
         emotion = data.get("emotion", "neutral")
         confidence = data.get("emotion_confidence", 0.0)

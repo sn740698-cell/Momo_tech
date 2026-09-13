@@ -174,17 +174,56 @@ class ConversationAgent:
             automation_summary=auto_summary_text
         )
 
-        # In-turn prompt assembly: embed verified grounding directly in the user turn for 1B model attention
+        # In-turn prompt assembly: calibrated intent handling, token allocation, and history sanitization
         is_automation = bool(state.metadata and state.metadata.get("automation_result"))
         is_research = bool(state.retrieved_context or needs_crawl or combined_grounding or query_decomp.get("is_web_crawl_request"))
 
+        clean_user_input = last_user_msg.strip()
+        common_greetings = {"hi", "hello", "hey", "good morning", "good afternoon", "good evening", "hi momo", "hello momo", "hey momo", "sup", "yo", "momo"}
+        is_greeting = (
+            any(re.match(r"^" + re.escape(g) + r"[\s!.,?]*$", clean_user_input, re.IGNORECASE) for g in common_greetings)
+            or (len(clean_user_input.split()) <= 3 and any(w in clean_user_input.lower().split() for w in ["hi", "hello", "hey", "momo"]))
+        )
+
+        code_words = ["python", "javascript", "typescript", "c++", "cpp", "c#", "java", "html", "css", "sql", "bash", "powershell", "code", "script", "program", "function", "algorithm"]
+        action_words = ["write", "create", "generate", "give", "show", "code", "implement", "build", "script", "program"]
+        has_code_word = any(w in clean_user_input.lower() for w in code_words)
+        has_action_word = any(w in clean_user_input.lower() for w in action_words)
+        is_code_request = (has_code_word and has_action_word) or "```" in clean_user_input
+
         user_turn_content = last_user_msg
-        if is_automation and auto_summary_text:
+        timeout_val = int(os.getenv("OLLAMA_TIMEOUT", "90"))
+
+        if is_greeting:
+            user_turn_content = (
+                f"{last_user_msg}\n\n"
+                f"[DIRECTIVE FOR CURRENT TURN: SHORT FRIENDLY GREETING]\n"
+                f"- Reply in 1 to 2 warm, natural sentences.\n"
+                f"- DO NOT output bullet points.\n"
+                f"- DO NOT mention, invent, or summarize past actions or tasks.\n"
+                f"- Keep it concise, friendly, and welcoming."
+            )
+            predict_tokens = 64
+            model_temp = 0.3
+        elif is_code_request:
+            user_turn_content = (
+                f"{last_user_msg}\n\n"
+                f"[DIRECTIVE FOR CURRENT TURN: CODE GENERATION]\n"
+                f"- Present all code clearly inside standard markdown code fences with the language tag (e.g. ```python\\n...\\n```).\n"
+                f"- Strictly preserve standard indentation (4 spaces), spacing, and newlines for all code blocks.\n"
+                f"- Keep any accompanying explanation concise and directly relevant."
+            )
+            predict_tokens = 600
+            model_temp = 0.2
+        elif is_automation and auto_summary_text:
             user_turn_content = (
                 f"{last_user_msg}\n\n"
                 f"[STATUS: ACTION ALREADY EXECUTED ON DESKTOP]: {auto_summary_text}.\n"
                 f"Confirm cheerfully in ONE sentence that it is opened for them. NEVER provide manual tutorial steps, how-to instructions, or keyboard shortcuts."
             )
+            timeout_val = 5
+            predict_tokens = 96
+            model_temp = 0.1
         elif is_research and combined_grounding:
             user_turn_content = (
                 f"{last_user_msg}\n\n"
@@ -192,11 +231,27 @@ class ConversationAgent:
                 f"{combined_grounding[:2200]}\n\n"
                 f"Instructions: Directly answer the question using ONLY the verified facts above. Organize key points into clear bullet points (• ). Never invent outside facts or events."
             )
+            predict_tokens = 500
+            model_temp = 0.0  # Greedy deterministic decoding
+        else:
+            predict_tokens = 320
+            model_temp = 0.35
 
-        history = [{"role": m.role, "content": m.content} for m in messages[:-1]]
+        # Sanitize prior history turns: remove internal prompt directives and prevent ghost task bleed
+        raw_history = [{"role": m.role, "content": m.content} for m in messages[:-1]]
+        clean_history = []
+        for h_msg in raw_history[-6:]:
+            c_text = h_msg.get("content", "")
+            c_clean = re.sub(r'\[(?:STATUS|VERIFIED|DIRECTIVE|DESKTOP AUTOMATION)[^\]]*\]:?', '', c_text).strip()
+            if c_clean:
+                clean_history.append({"role": h_msg.get("role", "user"), "content": c_clean})
+
+        # Standalone greetings use fresh empty history to prevent past automation contamination
+        effective_history = [] if is_greeting else clean_history
+
         chat_msgs = PromptBuilder.assemble_messages(
             current_input=user_turn_content,
-            chat_history=history[-6:],
+            chat_history=effective_history,
             system_prompt=system_prompt
         )
 
@@ -208,23 +263,6 @@ class ConversationAgent:
             active_model = self.model_manager.get_best_available_model()
 
         logger.info(f"ConversationAgent invoking local model: '{active_model}'")
-
-        # Fast generation: calibrated predict tokens and greedy deterministic decoding for research
-        is_automation = bool(state.metadata and state.metadata.get("automation_result"))
-        is_research = bool(state.retrieved_context or needs_crawl or combined_grounding or query_decomp.get("is_web_crawl_request"))
-
-        if is_automation:
-            timeout_val = 5  # Fast sub-second path for automation commands
-            predict_tokens = 96
-            model_temp = 0.1
-        elif is_research:
-            timeout_val = int(os.getenv("OLLAMA_TIMEOUT", "90"))
-            predict_tokens = 500
-            model_temp = 0.0  # Greedy deterministic decoding: ZERO random sampling eliminates hallucinations!
-        else:
-            timeout_val = int(os.getenv("OLLAMA_TIMEOUT", "90"))
-            predict_tokens = 320
-            model_temp = 0.35
 
         llm_result = await self.client.chat(
             messages=chat_msgs,
@@ -260,13 +298,14 @@ class ConversationAgent:
             # If JSON output was empty, whitespace, or refused, prompt LLM directly in free-text mode!
             if is_refusal or not parsed_response.message or parsed_response.message.strip() in ["...", "I am here.", "", "{}"]:
                 logger.info("JSON output was empty or refused. Re-invoking local LLM in free-form text mode...")
+                retry_tokens = 64 if is_greeting else (600 if is_code_request else 350)
                 retry_result = await self.client.chat(
                     messages=chat_msgs,
                     model=active_model,
-                    temperature=0.4,
+                    temperature=0.3 if is_greeting else 0.4,
                     timeout_seconds=timeout_val,
                     format=None,
-                    num_predict=640
+                    num_predict=retry_tokens
                 )
                 if retry_result.get("success") and retry_result.get("content"):
                     raw_text = retry_result.get("content", "").strip()
@@ -509,7 +548,8 @@ class ConversationAgent:
             "features", "why", "who is", "summary", "summarize", "guide", "overview", "updates"
         ])
         is_auto_task = bool(state.metadata and state.metadata.get("automation_result"))
-        if (is_informative or len(parsed_response.message) > 200) and not is_auto_task:
+        has_code = "```" in parsed_response.message or "def " in parsed_response.message or "class " in parsed_response.message or "import " in parsed_response.message
+        if (is_informative or len(parsed_response.message) > 200) and not is_auto_task and not is_greeting and not has_code:
             parsed_response.message = ResponseParser.format_as_bullets(parsed_response.message)
 
         # Clean code: Guard against memory recall hallucinations when no records exist

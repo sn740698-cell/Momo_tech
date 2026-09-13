@@ -16,7 +16,7 @@ export const VisionCard: React.FC<VisionCardProps> = ({
 }) => {
   const [localTelemetry, setLocalTelemetry] = useState<VisionTelemetry | null>(telemetry || null);
   const [showLivePreview, setShowLivePreview] = useState<boolean>(true);
-  const [streamMode, setStreamMode] = useState<'snapshot' | 'mjpeg'>('snapshot');
+  const [streamMode, setStreamMode] = useState<'snapshot' | 'mjpeg'>('mjpeg');
   const [snapshotSrc, setSnapshotSrc] = useState<string>('');
   const [streamError, setStreamError] = useState<boolean>(false);
   const [scanning, setScanning] = useState(false);
@@ -57,7 +57,7 @@ export const VisionCard: React.FC<VisionCardProps> = ({
           URL.revokeObjectURL(oldUrl);
         }
 
-        timerId = setTimeout(loadNextFrame, 125); // ~8 FPS smooth live preview
+        timerId = setTimeout(loadNextFrame, 33); // ~30 FPS live preview
       } catch (err) {
         if (!isMounted) return;
         timerId = setTimeout(loadNextFrame, 1000);

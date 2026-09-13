@@ -81,14 +81,17 @@ class ResponseParser:
 
     @classmethod
     def sanitize_cutoff_disclaimers(cls, text: str) -> str:
-        """Strips artificial AI training cutoff and inability disclaimers."""
+        """Strips artificial AI training cutoff and inability disclaimers while preserving newlines and code indentation."""
         if not text:
             return ""
         sanitized = text
         for pat in cls.CUTOFF_PATTERNS:
             sanitized = pat.sub("", sanitized)
-        sanitized = " ".join(sanitized.split()).strip()
-        return sanitized
+        # Clean trailing whitespace per line and limit excessive blank lines, preserving code and paragraph breaks
+        lines = [re.sub(r'[ \t]+$', '', line) for line in sanitized.split('\n')]
+        sanitized = '\n'.join(lines)
+        sanitized = re.sub(r'\n{3,}', '\n\n', sanitized)
+        return sanitized.strip()
 
     @classmethod
     def clean_text(cls, text: str) -> str:
@@ -160,20 +163,25 @@ class ResponseParser:
 
         cleaned = text.strip()
 
-        # Do not alter text that already has markdown bullets or code blocks
-        if any(marker in cleaned for marker in ["\n• ", "\n- ", "\n* ", "```"]):
+        # NEVER alter code blocks, existing markdown bullets, or code definitions
+        if any(marker in cleaned for marker in ["\n• ", "\n- ", "\n* ", "```", "def ", "class "]):
+            return cleaned
+
+        # Check if text is conversational greeting/chat - do NOT turn greetings into bullets!
+        first_line = cleaned.split('\n')[0].lower()
+        if any(g in first_line for g in ["hello", "hi ", "hi!", "hey", "how are you", "good morning", "good afternoon", "good evening"]):
             return cleaned
 
         # Split into sentences using punctuation boundaries
         sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', cleaned) if s.strip()]
-        if len(sentences) < 3:
+        if len(sentences) < 4:
             return cleaned
 
         intro = sentences[0]
         subsequent = sentences[1:]
 
-        bulleted_items = [f"• {s}" for s in subsequent if len(s) > 10]
-        if not bulleted_items:
+        bulleted_items = [f"• {s}" for s in subsequent if len(s) > 15]
+        if len(bulleted_items) < 3:
             return cleaned
 
         return f"{intro}\n\n" + "\n\n".join(bulleted_items)

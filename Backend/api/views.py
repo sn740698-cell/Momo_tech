@@ -584,7 +584,7 @@ def _get_or_update_annotated_jpeg(force_refresh: bool = False) -> bytes:
 
     now = time.time()
     with _preview_cache_lock:
-        if not force_refresh and _last_preview_jpeg_bytes is not None and (now - _last_preview_jpeg_time < 0.12):
+        if not force_refresh and _last_preview_jpeg_bytes is not None and (now - _last_preview_jpeg_time < 0.033):
             return _last_preview_jpeg_bytes
 
     camera = get_camera_manager()
@@ -625,7 +625,7 @@ def _ensure_preview_worker():
                     _get_or_update_annotated_jpeg(force_refresh=True)
                 except Exception:
                     pass
-                time.sleep(0.08)  # ~12 FPS smooth background annotation pipeline
+                time.sleep(0.033)  # ~30 FPS smooth background annotation pipeline
         _preview_worker_thread = threading.Thread(target=_worker, daemon=True, name="MomoPreviewWorker")
         _preview_worker_thread.start()
 
@@ -651,7 +651,7 @@ def vision_stream(request):
                     b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + raw_bytes + b'\r\n'
                 )
-            time.sleep(0.066)  # ~15 FPS smooth stream, light CPU footprint
+            time.sleep(0.033)  # ~30 FPS smooth stream, real-time preview
 
     response = StreamingHttpResponse(
         frame_generator(),

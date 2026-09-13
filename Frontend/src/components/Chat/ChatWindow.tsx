@@ -46,6 +46,145 @@ export function cleanDisplayMessage(content: string): string {
   return text.trim() || 'I am at your service.';
 }
 
+const CodeBlock: React.FC<{ language: string; code: string }> = ({ language, code }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="my-2.5 rounded-xl border border-slate-700/80 bg-slate-950/95 overflow-hidden shadow-xl font-mono text-xs">
+      <div className="flex items-center justify-between px-3.5 py-1.5 bg-slate-900/90 border-b border-slate-800 text-slate-400">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400/80 inline-block" />
+          <span className="text-[11px] font-semibold tracking-wider uppercase text-emerald-400">
+            {language || 'code'}
+          </span>
+        </div>
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 transition-all active:scale-95 cursor-pointer"
+          title="Copy code to clipboard"
+        >
+          {copied ? (
+            <>
+              <span className="text-emerald-400 font-bold">✓</span>
+              <span className="text-emerald-400 font-medium">Copied!</span>
+            </>
+          ) : (
+            <>
+              <span>📋</span>
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <pre className="p-4 overflow-x-auto text-emerald-300 whitespace-pre leading-relaxed font-mono select-text text-[13px]">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+};
+
+function renderInlineElements(text: string): React.ReactNode[] {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+      return (
+        <code
+          key={i}
+          className="px-1.5 py-0.5 mx-0.5 rounded bg-slate-950 border border-slate-700/80 font-mono text-xs text-amber-300 font-medium"
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return (
+        <strong key={i} className="font-semibold text-white">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return part;
+  });
+}
+
+const FormattedText: React.FC<{ text: string }> = ({ text }) => {
+  const lines = text.split('\n');
+  return (
+    <div className="space-y-1">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        const isBullet = trimmed.startsWith('•') || trimmed.startsWith('- ');
+        const content = isBullet ? trimmed.replace(/^[•\-]\s*/, '') : line;
+        const rendered = renderInlineElements(content);
+
+        if (isBullet) {
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-1 py-0.5">
+              <span className="text-emerald-400 select-none mt-0.5 font-bold">•</span>
+              <span className="flex-1 leading-relaxed">{rendered}</span>
+            </div>
+          );
+        }
+
+        if (trimmed === '') {
+          return <div key={idx} className="h-1.5" />;
+        }
+
+        return (
+          <div key={idx} className="leading-relaxed">
+            {rendered}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export const MessageContent: React.FC<{ content: string }> = ({ content }) => {
+  const cleaned = cleanDisplayMessage(content);
+  const codeBlockRegex = /```([a-zA-Z0-9_\-+]*)\r?\n([\s\S]*?)```/g;
+  const elements: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = codeBlockRegex.exec(cleaned)) !== null) {
+    if (match.index > lastIndex) {
+      const textBefore = cleaned.slice(lastIndex, match.index);
+      if (textBefore.trim()) {
+        elements.push(<FormattedText key={`text-${lastIndex}`} text={textBefore} />);
+      }
+    }
+    const lang = match[1] || 'code';
+    const code = match[2];
+    elements.push(<CodeBlock key={`code-${match.index}`} language={lang} code={code} />);
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < cleaned.length) {
+    const remaining = cleaned.slice(lastIndex);
+    const unclosedMatch = remaining.match(/^```([a-zA-Z0-9_\-+]*)\r?\n([\s\S]*)$/);
+    if (unclosedMatch) {
+      elements.push(
+        <CodeBlock key={`code-unclosed`} language={unclosedMatch[1] || 'code'} code={unclosedMatch[2]} />
+      );
+    } else if (remaining.trim()) {
+      elements.push(<FormattedText key={`text-${lastIndex}`} text={remaining} />);
+    }
+  }
+
+  if (elements.length === 0) {
+    return <FormattedText text={cleaned} />;
+  }
+
+  return <div className="text-sm space-y-1.5">{elements}</div>;
+};
+
 export const ChatWindow: React.FC<ChatWindowProps> = ({
   messages,
   onSendMessage,
@@ -227,7 +366,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 )}
 
                 {/* Text Body */}
-                <div className="whitespace-pre-wrap leading-relaxed text-sm">{cleanDisplayMessage(msg.content)}</div>
+                <div className="leading-relaxed text-sm">
+                  <MessageContent content={msg.content} />
+                </div>
 
                 {/* Footer timestamp, listen button & copy */}
                 <div className="mt-2 flex items-center justify-between gap-4 text-[10px] text-slate-500">

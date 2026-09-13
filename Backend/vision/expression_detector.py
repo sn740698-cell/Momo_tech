@@ -75,7 +75,7 @@ class ExpressionDetector:
         # In-memory annotation caching to avoid redundant heavy detector runs
         self._last_annotated_frame: Optional[np.ndarray] = None
         self._last_annotated_time: float = 0.0
-        self._annotated_cache_ttl: float = 0.12  # 120ms TTL (~8 FPS max inference rate)
+        self._annotated_cache_ttl: float = 0.033  # 33ms TTL (30 FPS smooth real-time streaming)
 
     def _init_detector(self):
         if os.path.exists(self.model_path) and os.path.getsize(self.model_path) > 10000:
@@ -1133,10 +1133,22 @@ class ExpressionDetector:
         theme_color = emotion_colors.get(emotion, (0, 230, 115))
 
         if face_detected and bbox:
-            bx, by, bw, bh = bbox
+            raw_bx, raw_by, raw_bw, raw_bh = bbox
+            # Exponential Moving Average (EMA) coordinate smoothing for jitter-free tracking
+            if self._last_known_bbox is not None:
+                alpha = 0.35
+                bx = int(alpha * raw_bx + (1 - alpha) * self._last_known_bbox[0])
+                by = int(alpha * raw_by + (1 - alpha) * self._last_known_bbox[1])
+                bw = int(alpha * raw_bw + (1 - alpha) * self._last_known_bbox[2])
+                bh = int(alpha * raw_bh + (1 - alpha) * self._last_known_bbox[3])
+            else:
+                bx, by, bw, bh = raw_bx, raw_by, raw_bw, raw_bh
+            self._last_known_bbox = [bx, by, bw, bh]
+
             corner_len = min(24, int(bw * 0.2))
             thick = 2
 
+            # Clean sleek corner brackets
             cv2.line(annotated, (bx, by), (bx + corner_len, by), theme_color, thick)
             cv2.line(annotated, (bx, by), (bx, by + corner_len), theme_color, thick)
             cv2.line(annotated, (bx + bw, by), (bx + bw - corner_len, by), theme_color, thick)
@@ -1152,14 +1164,10 @@ class ExpressionDetector:
             rec_conf = int(recognition.get("confidence", 0.0) * 100)
             tag = f"[{user_label} {rec_conf}%] | {emotion.upper()}"
             cv2.putText(annotated, tag, (bx, max(18, by - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.42, theme_color, 1, cv2.LINE_AA)
+        else:
+            self._last_known_bbox = None
 
-            if landmarks:
-                for name, pt in landmarks.items():
-                    px, py = int(pt[0]), int(pt[1])
-                    cv2.circle(annotated, (px, py), 3, (0, 255, 255), -1, cv2.LINE_AA)
-                    cv2.circle(annotated, (px, py), 5, theme_color, 1, cv2.LINE_AA)
-
-        # Top HUD Banner
+        # Top HUD Banner (clean semi-transparent status strip)
         hud_bg = np.zeros((48, w, 3), dtype=np.uint8)
         annotated[0:48, 0:w] = cv2.addWeighted(annotated[0:48, 0:w], 0.35, hud_bg, 0.65, 0)
 
@@ -1174,33 +1182,6 @@ class ExpressionDetector:
 
         emo_txt = f"EMOTION: {emotion.upper()} ({int(confidence * 100)}%)"
         cv2.putText(annotated, emo_txt, (w - 260, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.38, theme_color, 1, cv2.LINE_AA)
-
-        # Left Side HUD Sensor Gauges Overlay
-        if face_detected and sensors:
-            gauge_bg = np.zeros((140, 190, 3), dtype=np.uint8)
-            annotated[54:194, 12:202] = cv2.addWeighted(annotated[54:194, 12:202], 0.30, gauge_bg, 0.70, 0)
-            cv2.rectangle(annotated, (12, 54), (202, 194), (60, 60, 60), 1)
-
-            cv2.putText(annotated, "18-SENSOR PERCEPTION", (18, 68), cv2.FONT_HERSHEY_SIMPLEX, 0.32, (0, 255, 255), 1, cv2.LINE_AA)
-
-            items_to_show = [
-                ("EAR (Eye)", sensors.get("ear_sensor", 0.0), (0, 230, 115)),
-                ("Eye Glint", sensors.get("eye_glint_salience_sensor", 0.0), (255, 220, 0)),
-                ("Skin Vital", sensors.get("skin_chroma_vitality_sensor", 0.0), (255, 160, 200)),
-                ("Clarity", sensors.get("clarity_quality_sensor", 0.0), (0, 255, 200)),
-                ("Sadness", sensors.get("sadness_score", 0.0), (255, 128, 0)),
-                ("Tiredness", sensors.get("tired_score", 0.0), (0, 140, 255)),
-            ]
-            gy = 84
-            for label, val, bar_col in items_to_show:
-                cv2.putText(annotated, label[:10], (18, gy), cv2.FONT_HERSHEY_SIMPLEX, 0.28, (200, 200, 200), 1, cv2.LINE_AA)
-                bar_x = 94
-                bar_w = 90
-                cv2.rectangle(annotated, (bar_x, gy - 6), (bar_x + bar_w, gy + 1), (45, 45, 45), -1)
-                filled_w = int(max(0.0, min(1.0, val)) * bar_w)
-                if filled_w > 0:
-                    cv2.rectangle(annotated, (bar_x, gy - 6), (bar_x + filled_w, gy + 1), bar_col, -1)
-                gy += 18
 
         # Bottom Session & Strict Dual Sad+Tired Timer Bar
         bot_bg = np.zeros((32, w, 3), dtype=np.uint8)

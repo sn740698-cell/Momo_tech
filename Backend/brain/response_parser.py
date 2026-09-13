@@ -55,8 +55,16 @@ class ResponseParser:
         return text
 
     @classmethod
+    def clean_text(cls, text: str) -> str:
+        """Strips JSON scaffolds and cutoff disclaimers while keeping code indentation and newlines."""
+        if not text:
+            return ""
+        s = cls.strip_json_scaffolding(text)
+        return cls.sanitize_cutoff_disclaimers(s)
+
+    @classmethod
     def sanitize_cutoff_disclaimers(cls, text: str) -> str:
-        """Strips artificial AI training cutoff and inability disclaimers."""
+        """Strips artificial AI training cutoff and inability disclaimers while preserving newlines and code indentation."""
         if not text:
             return ""
         sanitized = text
@@ -65,7 +73,10 @@ class ResponseParser:
         # Strip system prompt intro echoes
         sanitized = re.sub(r'^You are MOMO[^\.\n]*[\.\n]?', '', sanitized, flags=re.IGNORECASE).strip()
         sanitized = re.sub(r'^(?:I would be glad|I\'d be glad|I would be happy|I\'d be happy) to help with that[\.\n]?', '', sanitized, flags=re.IGNORECASE).strip()
-        sanitized = " ".join(sanitized.split()).strip()
+        # Clean trailing whitespace per line and limit excessive blank lines, preserving code and paragraph breaks
+        lines = [re.sub(r'[ \t]+$', '', line) for line in sanitized.split('\n')]
+        sanitized = '\n'.join(lines)
+        sanitized = re.sub(r'\n{3,}', '\n\n', sanitized).strip()
         # Clean trailing truncated connectors
         if sanitized and sanitized[-1] in [',', ';', '-', ':']:
             sanitized = sanitized[:-1].rstrip() + '.'
@@ -75,19 +86,25 @@ class ResponseParser:
     def format_as_bullets(cls, text: str, min_chars: int = 180) -> str:
         """
         Cleanly organizes substantial multi-sentence explanations into structured bullet points.
+        Preserves code blocks, existing lists, and greeting introductions.
         """
         if not text or len(text.strip()) < min_chars:
             return text
         cleaned = text.strip()
-        if any(marker in cleaned for marker in ["\n• ", "\n- ", "\n* ", "```"]):
+        # NEVER alter code blocks, existing markdown bullets, or code definitions
+        if any(marker in cleaned for marker in ["\n• ", "\n- ", "\n* ", "```", "def ", "class "]):
+            return cleaned
+        # Check if text is conversational greeting/chat - do NOT turn greetings into bullets!
+        first_line = cleaned.split('\n')[0].lower()
+        if any(g in first_line for g in ["hello", "hi ", "hi!", "hey", "how are you", "good morning", "good afternoon", "good evening"]):
             return cleaned
         sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', cleaned) if s.strip()]
-        if len(sentences) < 3:
+        if len(sentences) < 4:
             return cleaned
         intro = sentences[0]
         subsequent = sentences[1:]
-        bulleted_items = [f"• {s}" for s in subsequent if len(s) > 10]
-        if not bulleted_items:
+        bulleted_items = [f"• {s}" for s in subsequent if len(s) > 15]
+        if len(bulleted_items) < 3:
             return cleaned
         return f"{intro}\n\n" + "\n\n".join(bulleted_items)
 

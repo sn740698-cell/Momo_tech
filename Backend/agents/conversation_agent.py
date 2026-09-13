@@ -99,11 +99,21 @@ class ConversationAgent:
 
         # Check for web crawl, direct URL, or temporal search intent (if not already crawled by WebCrawlAgent)
         temporal_intent = TemporalService.analyze_temporal_intent(last_user_msg)
+        lower_msg = last_user_msg.lower().strip()
+        has_knowledge_intent = (
+            any(lower_msg.startswith(pfx) for pfx in [
+                "tell me about", "who is", "who was", "what is", "what was", "where is",
+                "facts about", "details on", "details about", "biography of", "history of",
+                "explain about", "tell me more about"
+            ])
+            or any(w in lower_msg for w in ["crawl", "scrape", "search web", "puneeth", "rajkumar"])
+        )
         needs_crawl = (
             not state.retrieved_context and (
                 query_decomp.get("is_web_crawl_request", False)
                 or bool(query_decomp.get("urls"))
                 or (temporal_intent.get("needs_web_search") and not temporal_intent.get("is_date_query"))
+                or has_knowledge_intent
             )
         )
 

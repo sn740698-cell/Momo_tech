@@ -16,7 +16,7 @@ export const VisionCard: React.FC<VisionCardProps> = ({
 }) => {
   const [localTelemetry, setLocalTelemetry] = useState<VisionTelemetry | null>(telemetry || null);
   const [showLivePreview, setShowLivePreview] = useState<boolean>(true);
-  const [streamMode, setStreamMode] = useState<'snapshot' | 'mjpeg'>('mjpeg');
+  const [streamMode, setStreamMode] = useState<'snapshot' | 'mjpeg'>('snapshot');
   const [snapshotSrc, setSnapshotSrc] = useState<string>('');
   const [streamError, setStreamError] = useState<boolean>(false);
   const [scanning, setScanning] = useState(false);
@@ -48,19 +48,31 @@ export const VisionCard: React.FC<VisionCardProps> = ({
         if (!isMounted) return;
 
         const newBlobUrl = URL.createObjectURL(blob);
-        const oldUrl = activeBlobUrlRef.current;
-        activeBlobUrlRef.current = newBlobUrl;
-        setSnapshotSrc(newBlobUrl);
-        setStreamError(false);
+        const img = new Image();
+        img.onload = () => {
+          if (!isMounted) {
+            URL.revokeObjectURL(newBlobUrl);
+            return;
+          }
+          const oldUrl = activeBlobUrlRef.current;
+          activeBlobUrlRef.current = newBlobUrl;
+          setSnapshotSrc(newBlobUrl);
+          setStreamError(false);
 
-        if (oldUrl && oldUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(oldUrl);
-        }
+          if (oldUrl && oldUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(oldUrl);
+          }
 
-        timerId = setTimeout(loadNextFrame, 33); // ~30 FPS live preview
+          timerId = setTimeout(loadNextFrame, 30); // ~30 FPS silky-smooth preview
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(newBlobUrl);
+          if (isMounted) timerId = setTimeout(loadNextFrame, 60);
+        };
+        img.src = newBlobUrl;
       } catch (err) {
         if (!isMounted) return;
-        timerId = setTimeout(loadNextFrame, 1000);
+        timerId = setTimeout(loadNextFrame, 500);
       }
     };
 

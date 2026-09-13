@@ -57,11 +57,14 @@ class RootSupervisor:
         if get_desktop_controller().extract_automation_intent(text):
             return "automation"
 
-        # Check for live web crawl and research intent (e.g. 'crawl', 'scrape', 'search web', 'sih', 'hackathon', 'news', 'happening')
+        # Check for live web crawl, knowledge lookup, and research intent
         if any(w in lower for w in [
             "crawl", "scrape", "web crawl", "search web", "look up", "research",
             "sih", "hackathon", "smart india hackathon", "news", "happening",
-            "latest", "trending", "current events", "updates on"
+            "latest", "trending", "current events", "updates on",
+            "tell me about", "who is", "who was", "what is", "what was", "where is",
+            "biography", "history of", "facts about", "details about", "details on",
+            "information about", "information on", "explain about", "tell me more"
         ]) or re.search(r'https?://', text):
             return "research"
 

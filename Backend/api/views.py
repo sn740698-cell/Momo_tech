@@ -647,9 +647,12 @@ def vision_stream(request):
         while True:
             raw_bytes = _get_or_update_annotated_jpeg(force_refresh=False)
             if raw_bytes:
+                content_len = len(raw_bytes)
                 yield (
                     b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + raw_bytes + b'\r\n'
+                    b'Content-Type: image/jpeg\r\n'
+                    b'Content-Length: ' + str(content_len).encode('ascii') + b'\r\n\r\n'
+                    + raw_bytes + b'\r\n'
                 )
             time.sleep(0.033)  # ~30 FPS smooth stream, real-time preview
 

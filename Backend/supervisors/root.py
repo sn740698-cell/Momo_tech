@@ -84,37 +84,72 @@ class RootSupervisor:
 
     @classmethod
     def extract_active_topic(cls, text: str, messages: list) -> str:
-        """Extracts the subject of interest strictly from current prompt, only falling back if explicitly anaphoric."""
+        """Extracts the subject of interest, cleanly resolving pronouns and follow-up references from chat history."""
         lower = text.lower().strip()
-        # 1. Explicit topic in current message (e.g. 'tell me more about Virat Kohli')
-        m = re.search(r"(?:about|on|regarding)\s+([A-Za-z0-9\s]+)", text, re.IGNORECASE)
+
+        def is_just_pronouns_or_filler(cand: str) -> bool:
+            if not cand:
+                return True
+            clean = re.sub(r'[^\w\s]', '', cand.lower()).strip()
+            words = clean.split()
+            if not words:
+                return True
+            filler = {"and", "tell", "me", "more", "about", "that", "this", "it", "him", "her", "them", "please", "also", "again", "the", "same", "these", "those"}
+            meaningful = [w for w in words if w not in filler]
+            return len(meaningful) == 0
+
+        # 1. Explicit topic in current message (e.g. 'tell me more about Dr. A.P.J. Abdul Kalam')
+        m = re.search(r"(?:about|on|regarding)\s+([A-Za-z0-9\s\.\'\-]+)", text, re.IGNORECASE)
         if m:
-            cand = m.group(1).strip().rstrip("?.!")
-            if len(cand) > 1 and cand.lower() not in ["it", "this", "that", "him", "her", "them", "more"]:
+            cand = m.group(1).strip().rstrip("?.!,")
+            if not is_just_pronouns_or_filler(cand):
                 return cand
 
         # 2. Direct question in current message
-        q_match = re.search(r"(?:who is|what is|how does|tell me about|explain)\s+([A-Za-z0-9\s]+)", text, re.IGNORECASE)
+        q_match = re.search(r"(?:who is|what is|how does|tell me about|explain)\s+([A-Za-z0-9\s\.\'\-]+)", text, re.IGNORECASE)
         if q_match:
-            cand = q_match.group(1).strip().rstrip("?.!")
-            if cand and cand.lower() not in ["it", "this", "that", "him", "her", "them"]:
+            cand = q_match.group(1).strip().rstrip("?.!,")
+            if not is_just_pronouns_or_filler(cand):
                 return cand
 
-        # 3. Only check immediately preceding turn if user said an anaphoric follow-up (e.g. 'tell me more', 'tell me more about him')
-        is_anaphoric = any(w in lower for w in [
+        # 3. Anaphoric follow-up: user is referring to a previously discussed topic
+        anaphoric_triggers = [
             "tell me more", "tell more", "more about", "about him", "about her", "about it",
-            "elaborate", "continue", "what else", "go deeper", "more details", "who is he", "who is she"
-        ])
+            "about that", "about this", "tell me about that", "tell me about this", "tell me about him",
+            "tell me about her", "tell me about it", "elaborate", "continue", "what else", "go deeper",
+            "more details", "who is he", "who is she", "what about that", "what about this",
+            "tell me more about that", "tell me more about this", "tell me more about him",
+            "tell me more about her", "tell me about that and tell me more about that"
+        ]
+        is_anaphoric = (
+            any(w in lower for w in anaphoric_triggers)
+            or any(re.search(rf"\b{p}\b", lower) for p in ["that", "this", "him", "her", "it"])
+        )
+
         if is_anaphoric and messages and len(messages) > 1:
             for msg in reversed(messages[:-1]):
-                m_text = getattr(msg, "content", "") if hasattr(msg, "content") else msg.get("content", "")
-                m_match = re.search(r"(?:who is|what is|tell me about|about)\s+([A-Za-z0-9\s]+)", m_text, re.IGNORECASE)
+                m_text = getattr(msg, "content", "") if hasattr(msg, "content") else (msg.get("content", "") if isinstance(msg, dict) else str(msg))
+                if not m_text:
+                    continue
+
+                # If user previously asked about an entity, extract full entity including dots (e.g. 'Dr. A.P.J. Abdul Kalam')
+                m_match = re.search(r"(?:who is|what is|tell me about|about|facts about)\s+([A-Za-z0-9\s\.\'\-]+)", m_text, re.IGNORECASE)
                 if m_match:
-                    cand = m_match.group(1).strip().rstrip("?.!")
-                    if cand and cand.lower() not in ["it", "this", "that", "him", "her", "them"]:
+                    cand = m_match.group(1).strip().rstrip("?.!,")
+                    if not is_just_pronouns_or_filler(cand) and len(cand) > 1:
                         return cand
-                if getattr(msg, "role", "") == "user" and 3 <= len(m_text.strip()) <= 40:
-                    cand = m_text.strip().rstrip("?.!")
+
+                # Also check assistant's opening reference (e.g. 'Here are the answers to your questions about Puneeth Rajkumar:')
+                asst_match = re.search(r"(?:about|regarding|dedicated to|memorial to)\s+([A-Za-z0-9\s\.\'\-]+?)(?:\:|\.|\n|\,)", m_text, re.IGNORECASE)
+                if asst_match:
+                    cand = asst_match.group(1).strip().rstrip("?.!,")
+                    if not is_just_pronouns_or_filler(cand) and len(cand) > 1:
+                        return cand
+
+                # If previous user message was simply a short topic name (e.g. 'Puneeth Rajkumar' or 'Smart India Hackathon')
+                role = getattr(msg, "role", "") if hasattr(msg, "role") else (msg.get("role", "") if isinstance(msg, dict) else "")
+                if role == "user" and 3 <= len(m_text.strip()) <= 60:
+                    cand = m_text.strip().rstrip("?.!,")
                     if not any(w in cand.lower() for w in ["hello", "hi", "ok", "yes", "sure", "thanks"]):
                         return cand
 
@@ -187,12 +222,15 @@ class RootSupervisor:
                 "directive": f"The user is asking to recall information from their saved memory records (query: '{search_query or 'all'}'). Present the stored facts in an articulate, dignified, and organized manner."
             }
 
-        # 3. Conversational Follow-Up / Deepening ('tell me more', 'tell me more about him')
+        # 3. Conversational Follow-Up / Deepening ('tell me more', 'tell me about that', 'tell me more about him')
         if any(w in lower for w in [
             "tell me more", "give me more", "more details", "elaborate", "what else",
             "tell me more about", "give me more about", "continue", "go deeper",
-            "tell more", "more about", "about him", "about her", "about it"
-        ]):
+            "tell more", "more about", "about him", "about her", "about it",
+            "about that", "about this", "tell me about that", "tell me about this",
+            "what about that", "what about this", "tell me about him", "tell me about her",
+            "tell me about it", "tell me about that and tell me more about that"
+        ]) or any(re.search(rf"\b{p}\b", lower) for p in ["that", "this", "him", "her"]):
             topic = cls.extract_active_topic(text, msgs)
             return {
                 "intent": "followup_deepening",
@@ -329,7 +367,8 @@ class RootSupervisor:
             updates["metadata"] = {**state.metadata, "memory_payload": intent_info["memory_payload"]}
         if "memory_query" in intent_info:
             updates["metadata"] = {**state.metadata, "memory_query": intent_info["memory_query"]}
-        if "topic" in intent_info:
-            updates["metadata"] = {**state.metadata, "active_topic": intent_info["topic"]}
+        active_topic = intent_info.get("topic") or self.extract_active_topic(last_user_msg, state.messages)
+        if active_topic:
+            updates["metadata"] = {**state.metadata, "active_topic": active_topic}
 
         return updates

@@ -33,11 +33,20 @@ class SearchScoutAgent:
         if not last_user_msg:
             last_user_msg = state.voice_input or ""
 
-        logger.info(f"SearchScoutAgent scouting candidates for query: '{last_user_msg}'")
+        # Resolve anaphoric follow-up queries using conversation memory (e.g. 'tell me about that')
+        active_topic = state.metadata.get("active_topic") if state.metadata else None
+        is_followup = any(w in last_user_msg.lower() for w in [
+            "that", "this", "him", "her", "it", "more", "tell me about that", "tell me more", "elaborate"
+        ])
+        target_topic = active_topic if (active_topic and is_followup and active_topic.lower() != last_user_msg.lower()) else last_user_msg
+
+        logger.info(f"SearchScoutAgent scouting candidates for query: '{target_topic}' (raw: '{last_user_msg}')")
 
         # 1. Multi-angle query expansion
-        clean_q = self.crawler.expand_query(last_user_msg)
+        clean_q = self.crawler.expand_query(target_topic)
         queries = [clean_q]
+        if is_followup and active_topic and target_topic == active_topic:
+            queries.append(f"{active_topic} details facts")
 
         # Add targeted temporal variant ONLY if query seeks recent news or developments
         has_temporal_intent = any(w in clean_q.lower() for w in ["current", "latest", "update", "happening", "today", "yesterday", "news", "trend", "status"])
@@ -77,7 +86,7 @@ class SearchScoutAgent:
                 logger.debug(f"Direct national news fetch error in SearchScout: {e}")
 
         # 2. Query search backends in priority order
-        is_encyclopedic = any(w in last_user_msg.lower() for w in ["who is", "who was", "biography", "history", "tell me about", "what is", "facts about", "explain about"])
+        is_encyclopedic = any(w in target_topic.lower() for w in ["who is", "who was", "biography", "history", "tell me about", "what is", "facts about", "explain about"]) or (is_followup and bool(active_topic))
 
         # For biographical or encyclopedic topics, query Wikipedia first for high-authority grounded facts
         if is_encyclopedic:

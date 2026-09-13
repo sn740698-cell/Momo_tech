@@ -122,15 +122,21 @@ class ConversationAgent:
             )
         )
 
+        active_topic = state.metadata.get("active_topic") if state.metadata else None
+        is_followup = any(w in last_user_msg.lower() for w in [
+            "that", "this", "him", "her", "it", "more", "tell me about that", "tell me more", "elaborate"
+        ])
+        target_topic = active_topic if (active_topic and is_followup and active_topic.lower() != last_user_msg.lower()) else last_user_msg
+
         if needs_crawl:
             try:
                 crawler = LiveWebCrawlerService(timeout_seconds=8.0)
-                clean_q = last_user_msg
+                clean_q = target_topic
                 for pfx in ["what happened with", "what happened in", "what happened", "what is happening with", "web crawl", "crawl", "tell me its latest news with the date and time", "tell me latest news"]:
                     clean_q = re.sub(re.escape(pfx), "", clean_q, flags=re.IGNORECASE)
                 clean_q = clean_q.strip()
                 if not clean_q or len(clean_q) < 3:
-                    clean_q = last_user_msg
+                    clean_q = target_topic
 
                 live_items = await crawler.gather_realtime_context(
                     query=clean_q,
@@ -240,8 +246,12 @@ class ConversationAgent:
             predict_tokens = 80
             model_temp = 0.1
         elif is_research and combined_grounding:
+            prompt_header = last_user_msg
+            if active_topic and is_followup and active_topic.lower() not in last_user_msg.lower():
+                prompt_header = f"{last_user_msg} (Inquiring further about: {active_topic})"
+
             user_turn_content = (
-                f"{last_user_msg}\n\n"
+                f"{prompt_header}\n\n"
                 f"[VERIFIED GROUNDED FACTS & SOURCES]:\n"
                 f"{combined_grounding[:2400]}\n\n"
                 f"Instructions: Directly answer the question using ONLY the verified facts above. "

@@ -179,6 +179,12 @@ class RelevanceAnalyzerAgent:
         if not query_tokens:
             query_tokens = [w for w in self.tokenize(last_user_msg) if len(w) > 2 and w not in stop_words]
 
+        # Incorporate resolved topic tokens from conversation memory so follow-up queries rank properly
+        active_topic = state.metadata.get("active_topic") if state.metadata else None
+        if active_topic:
+            topic_tokens = [w for w in self.tokenize(active_topic) if len(w) > 2 and w not in stop_words]
+            query_tokens = list(dict.fromkeys(query_tokens + topic_tokens))
+
         # Extract all candidate passages across chunks
         candidate_pool: List[Tuple[str, str, str]] = []  # (passage_text, source, url)
         for chunk in raw_chunks:

@@ -30,13 +30,24 @@ class PromptBuilder:
         proactive_trigger: Optional[str] = None,
         query_decomposition: Optional[Dict[str, Any]] = None,
         reinforced_rules: Optional[List[str]] = None,
-        web_grounding: Optional[str] = None
+        web_grounding: Optional[str] = None,
+        automation_summary: Optional[str] = None
     ) -> str:
         prompt_parts = [BASE_SYSTEM_PROMPT]
 
         # Query decomposition & comprehension plan (ensures every sub-goal is understood)
         if query_decomposition and query_decomposition.get("comprehension_directive"):
             prompt_parts.append(query_decomposition["comprehension_directive"])
+
+        # Desktop automation execution directive
+        if automation_summary:
+            prompt_parts.append(
+                f"\n[DESKTOP AUTOMATION EXECUTED SUCCESSFULLY]:\n"
+                f"{automation_summary}\n\n"
+                f"MANDATORY INSTRUCTION:\n"
+                f"- Confirm cheerfully in ONE direct sentence that it has been opened/launched on their desktop.\n"
+                f"- NEVER output manual tutorials, steps (e.g. '1. Open...'), or keyboard shortcuts."
+            )
 
         # Deterministic Temporal & Environmental Grounding
         anchor = TemporalService.get_temporal_anchor()

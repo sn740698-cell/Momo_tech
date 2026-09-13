@@ -124,6 +124,19 @@ async def execute_single_command(cmd_spec: Dict[str, Any], session_id: str = "te
             if not any(k in msg.lower() for k in [exp_target, "launching", "opening", "opened", "launched"]):
                 passed = False
                 notes.append(f"Automation did not confirm action for {exp_target}")
+
+            # Anti-tutorial and anti-hallucination verification
+            tutorial_markers = [
+                "here's how", "here is how", "follow these steps", "step 1",
+                "1. open", "2. sign in", "keyboard shortcut", "ctrl + c", "ctrl +",
+                "as an ai", "i do not have access to your computer", "you are momo",
+                "i would be glad to help with that"
+            ]
+            found_tutorials = [t for t in tutorial_markers if t in msg.lower()]
+            if found_tutorials:
+                passed = False
+                notes.append(f"Hallucinated tutorial or disclaimer detected: {found_tutorials}")
+
             if elapsed > 15.0:
                 notes.append(f"Slow automation: {elapsed:.2f}s")
 

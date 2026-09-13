@@ -19,6 +19,9 @@ class ResponseParser:
         re.compile(r"i (?:do not|don't) have (?:access to )?real-time (?:data|information|updates)[^\.\n]*[\.\n]?", re.IGNORECASE),
         re.compile(r"i cannot provide real-time (?:updates|information)[^\.\n]*[\.\n]?", re.IGNORECASE),
         re.compile(r"as an ai (?:language )?model[^\.\n]*[\.\n]?", re.IGNORECASE),
+        re.compile(r"i (?:do not|don't) have (?:access to )?(?:your )?(?:computer|desktop|files|system)[^\.\n]*[\.\n]?", re.IGNORECASE),
+        re.compile(r"i cannot (?:open|launch|access|interact with) (?:applications|apps|software|websites)[^\.\n]*[\.\n]?", re.IGNORECASE),
+        re.compile(r"i (?:do not|don't) have (?:hands|a physical body)[^\.\n]*[\.\n]?", re.IGNORECASE),
     ]
 
     @classmethod
@@ -53,14 +56,40 @@ class ResponseParser:
 
     @classmethod
     def sanitize_cutoff_disclaimers(cls, text: str) -> str:
-        """Strips artificial AI training cutoff disclaimers."""
+        """Strips artificial AI training cutoff and inability disclaimers."""
         if not text:
             return ""
         sanitized = text
         for pat in cls.CUTOFF_PATTERNS:
             sanitized = pat.sub("", sanitized)
+        # Strip system prompt intro echoes
+        sanitized = re.sub(r'^You are MOMO[^\.\n]*[\.\n]?', '', sanitized, flags=re.IGNORECASE).strip()
+        sanitized = re.sub(r'^(?:I would be glad|I\'d be glad|I would be happy|I\'d be happy) to help with that[\.\n]?', '', sanitized, flags=re.IGNORECASE).strip()
         sanitized = " ".join(sanitized.split()).strip()
+        # Clean trailing truncated connectors
+        if sanitized and sanitized[-1] in [',', ';', '-', ':']:
+            sanitized = sanitized[:-1].rstrip() + '.'
         return sanitized
+
+    @classmethod
+    def format_as_bullets(cls, text: str, min_chars: int = 180) -> str:
+        """
+        Cleanly organizes substantial multi-sentence explanations into structured bullet points.
+        """
+        if not text or len(text.strip()) < min_chars:
+            return text
+        cleaned = text.strip()
+        if any(marker in cleaned for marker in ["\n• ", "\n- ", "\n* ", "```"]):
+            return cleaned
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', cleaned) if s.strip()]
+        if len(sentences) < 3:
+            return cleaned
+        intro = sentences[0]
+        subsequent = sentences[1:]
+        bulleted_items = [f"• {s}" for s in subsequent if len(s) > 10]
+        if not bulleted_items:
+            return cleaned
+        return f"{intro}\n\n" + "\n\n".join(bulleted_items)
 
     @classmethod
     def parse(cls, raw_text: str) -> Dict[str, Any]:

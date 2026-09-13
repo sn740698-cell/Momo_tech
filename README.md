@@ -352,7 +352,13 @@ flowchart TD
     - Verified source passages are injected directly into the in-turn user turn, ensuring high attention focus for compact local models (`Llama-3.2-1B-Instruct`).
     - Enforces greedy deterministic decoding (`temperature=0.0`) for research tasks, eliminating sampling-induced hallucinations.
     - Implements multi-tier hallucination detection: validates source entity overlap, guards against obsolete years (2020-2022), refuses canned filler, and automatically falls back to verified bullet-point synthesis from `RelevanceAnalyzerAgent`.
-  - Implements fast-path generation for desktop automation actions (`timeout=5s`, `predict_tokens=48`) and anti-hallucination overrides for live news.
+  - **Zero-Tutorial Desktop Automation Engine**:
+    - Proactively intercepts automation intents (`open calculator`, `open github`, `launch notepad`, `play 2048`) via `DesktopAutomationController`, ensuring actions are always executed on the host OS.
+    - Bulletproof anti-tutorial filter purges any numbered instructions (`1. Open... 2. Click...`), fake keyboard shortcuts (`Ctrl+C to open Calculator`), or disclaimers, instantly returning crisp affirmative confirmations (`"Opening <target> for you now!"` / `"Launching <target> on your desktop now!"`).
+  - **Bulleted Information Structuring Engine**:
+    - Whenever MOMO delivers complex explanations, rich research, multi-part answers, or deep knowledge, the response is structured cleanly with introductory framing followed by distinct, readable bullet points (`• `).
+  - **System Prompt Echo & Scaffolding Purging**:
+    - Strips all leaked prompt intros (`You are MOMO...`), memorized schema examples, and AI inability disclaimers (`As an AI language model...`).
 
 ---
 

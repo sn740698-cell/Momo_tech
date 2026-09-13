@@ -50,6 +50,44 @@ class TestResponseSanitization(unittest.TestCase):
         self.assertEqual(parsed["expression"], "happy")
         self.assertEqual(parsed["animation"], "nod")
 
+    def test_prompt_echo_stripping(self):
+        text_with_echo = (
+            '{\n'
+            '  "expression": "happy",\n'
+            '  "animation": "nod",\n'
+            '  "message": "You are MOMO, an intelligent, helpful, articulate, and deeply caring AI companion robot. I would be glad to help with that. Launched Calculator on your desktop."\n'
+            '}'
+        )
+        resp = ResponseParser.parse(text_with_echo)
+        self.assertNotIn("You are MOMO", resp.message)
+        self.assertNotIn("I would be glad to help", resp.message)
+        self.assertIn("Launched Calculator on your desktop", resp.message)
+
+    def test_inability_disclaimer_stripping(self):
+        disclaimer_text = (
+            '{\n'
+            '  "expression": "normal",\n'
+            '  "animation": "none",\n'
+            '  "message": "As an AI language model, I do not have access to your computer. Here is the answer."\n'
+            '}'
+        )
+        resp = ResponseParser.parse(disclaimer_text)
+        self.assertNotIn("as an ai", resp.message.lower())
+        self.assertNotIn("do not have access to your computer", resp.message.lower())
+        self.assertIn("Here is the answer", resp.message)
+
+    def test_format_as_bullets(self):
+        long_paragraph = (
+            "Quantum computing represents a paradigm shift in data processing. "
+            "It utilizes quantum bits known as qubits capable of existing in multiple states simultaneously. "
+            "Superposition enables exponential parallelism compared to classical binary logic. "
+            "Entanglement links qubits together to perform synchronized calculations across systems."
+        )
+        formatted = ResponseParser.format_as_bullets(long_paragraph, min_chars=100)
+        self.assertIn("• ", formatted)
+        self.assertTrue(formatted.startswith("Quantum computing represents a paradigm shift"))
+        self.assertIn("• It utilizes quantum bits", formatted)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -29,6 +29,17 @@ class ResponseParser:
         re.compile(r"i (?:do not|don't) have (?:access to )?real-time (?:data|information|updates)[^\.\n]*[\.\n]?", re.IGNORECASE),
         re.compile(r"i cannot provide real-time (?:updates|information)[^\.\n]*[\.\n]?", re.IGNORECASE),
         re.compile(r"as an ai (?:language )?model[^\.\n]*[\.\n]?", re.IGNORECASE),
+        re.compile(r"i (?:do not|don't) have (?:access to )?(?:your )?(?:computer|desktop|files|system)[^\.\n]*[\.\n]?", re.IGNORECASE),
+        re.compile(r"i cannot (?:open|launch|access|interact with) (?:applications|apps|software|websites)[^\.\n]*[\.\n]?", re.IGNORECASE),
+        re.compile(r"i (?:do not|don't) have (?:hands|a physical body)[^\.\n]*[\.\n]?", re.IGNORECASE),
+    ]
+
+    TUTORIAL_MARKERS = [
+        re.compile(r"here'?s\s+how(?:\s+you\s+can)?(?:\s+do\s+it)?[:\.]?\s*", re.IGNORECASE),
+        re.compile(r"here\s+is\s+how(?:\s+you\s+can)?(?:\s+do\s+it)?[:\.]?\s*", re.IGNORECASE),
+        re.compile(r"follow\s+these\s+steps[:\.]?\s*", re.IGNORECASE),
+        re.compile(r"\bkeyboard\s+shortcut\s*['\"]?[a-z0-9\s\+\-]+['\"]?", re.IGNORECASE),
+        re.compile(r"\bctrl\s*\+\s*[a-z0-9]\b", re.IGNORECASE),
     ]
 
     @classmethod
@@ -70,7 +81,7 @@ class ResponseParser:
 
     @classmethod
     def sanitize_cutoff_disclaimers(cls, text: str) -> str:
-        """Strips artificial AI training cutoff disclaimers."""
+        """Strips artificial AI training cutoff and inability disclaimers."""
         if not text:
             return ""
         sanitized = text
@@ -95,6 +106,10 @@ class ResponseParser:
         cleaned = re.sub(r'^["\']?User["\']?,\s*[^:]+:\s*', '', cleaned, flags=re.IGNORECASE)
         cleaned = re.sub(r'^User:\s*', '', cleaned, flags=re.IGNORECASE)
 
+        # Strip echoed system prompt intro sentences
+        cleaned = re.sub(r'^You are MOMO[^\.\n]*[\.\n]?', '', cleaned, flags=re.IGNORECASE).strip()
+        cleaned = re.sub(r'^(?:I would be glad|I\'d be glad|I would be happy|I\'d be happy) to help with that[\.\n]?', '', cleaned, flags=re.IGNORECASE).strip()
+
         # Strip placeholder echoes and template brackets
         lower_cleaned = cleaned.lower()
         if (
@@ -102,6 +117,8 @@ class ResponseParser:
                 "your direct, helpful, and accurate response to the user",
                 "your conversational response in markdown text",
                 "your conversational response",
+                "your articulate conversational response here.",
+                "your articulate conversational response here",
                 "<your response>",
                 "<your helpful and accurate response>",
                 "<your complete, articulate response here>",
@@ -121,11 +138,45 @@ class ResponseParser:
 
         # Strip echoed prompt instructions or system directives
         cleaned = re.sub(r'CRITICAL ANTI-HALLUCINATION REQUIREMENT:.*$', '', cleaned, flags=re.DOTALL | re.IGNORECASE).strip()
-        cleaned = re.sub(r'\[(?:VERIFIED GROUNDED FACTS|VERIFIED SOURCE PASSAGES|GROUNDED KNOWLEDGE)[^\]]*\].*$', '', cleaned, flags=re.DOTALL | re.IGNORECASE).strip()
+        cleaned = re.sub(r'\[(?:VERIFIED GROUNDED FACTS|VERIFIED SOURCE PASSAGES|GROUNDED KNOWLEDGE|DESKTOP AUTOMATION EXECUTED)[^\]]*\].*$', '', cleaned, flags=re.DOTALL | re.IGNORECASE).strip()
 
         # Sanitize cutoff disclaimers
         cleaned = cls.sanitize_cutoff_disclaimers(cleaned)
+
+        # Clean trailing truncated connectors (e.g. "calculations," -> "calculations.")
+        if cleaned and cleaned[-1] in [',', ';', '-', ':']:
+            cleaned = cleaned[:-1].rstrip() + '.'
+
         return cleaned
+
+    @classmethod
+    def format_as_bullets(cls, text: str, min_chars: int = 180) -> str:
+        """
+        Cleanly organizes substantial multi-sentence explanations into structured bullet points.
+        Preserves code blocks, existing lists, and greeting introductions.
+        """
+        if not text or len(text.strip()) < min_chars:
+            return text
+
+        cleaned = text.strip()
+
+        # Do not alter text that already has markdown bullets or code blocks
+        if any(marker in cleaned for marker in ["\n• ", "\n- ", "\n* ", "```"]):
+            return cleaned
+
+        # Split into sentences using punctuation boundaries
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', cleaned) if s.strip()]
+        if len(sentences) < 3:
+            return cleaned
+
+        intro = sentences[0]
+        subsequent = sentences[1:]
+
+        bulleted_items = [f"• {s}" for s in subsequent if len(s) > 10]
+        if not bulleted_items:
+            return cleaned
+
+        return f"{intro}\n\n" + "\n\n".join(bulleted_items)
 
     @classmethod
     def normalize_expression(cls, expr_raw: str) -> str:

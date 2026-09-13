@@ -72,11 +72,25 @@ class ConversationAgent:
                     f"Paid {f.amount_paid}, Balance Due {f.balance_due}, Due Date {f.due_date}, Status {f.payment_status}"
                 )
 
-        # Include desktop automation execution outcome if available from AutomationAgent
+        # Defense-in-depth: Proactively intercept unexecuted automation intent before prompt generation
+        from automation import get_desktop_controller
+        controller = get_desktop_controller()
+        if not (state.metadata and state.metadata.get("automation_result")):
+            auto_intent = controller.extract_automation_intent(last_user_msg)
+            if auto_intent:
+                logger.info(f"ConversationAgent executing detected automation intent directly: {auto_intent}")
+                auto_res = controller.execute_automation(auto_intent)
+                if not state.metadata:
+                    state.metadata = {}
+                state.metadata["automation_result"] = auto_res
+
+        # Include desktop automation execution outcome if available
+        auto_summary_text = None
         if state.metadata and state.metadata.get("automation_result"):
             auto_res = state.metadata["automation_result"]
+            auto_summary_text = auto_res.get('summary', 'Action performed successfully.')
             web_grounding_snippets.append(
-                f"[Desktop Automation Action Executed]: {auto_res.get('summary', 'Action performed successfully.')} "
+                f"[Desktop Automation Action Executed]: {auto_summary_text} "
                 f"(Target: {auto_res.get('target')}, Action: {auto_res.get('action')}, Status: {'Success' if auto_res.get('success') else 'Failed'})"
             )
 
@@ -156,7 +170,8 @@ class ConversationAgent:
             work_duration_minutes=work_mins,
             proactive_trigger=proactive_trigger,
             query_decomposition=query_decomp,
-            reinforced_rules=learned_rules
+            reinforced_rules=learned_rules,
+            automation_summary=auto_summary_text
         )
 
         # In-turn prompt assembly: embed verified grounding directly in the user turn for 1B model attention
@@ -164,12 +179,18 @@ class ConversationAgent:
         is_research = bool(state.retrieved_context or needs_crawl or combined_grounding or query_decomp.get("is_web_crawl_request"))
 
         user_turn_content = last_user_msg
-        if is_research and combined_grounding:
+        if is_automation and auto_summary_text:
+            user_turn_content = (
+                f"{last_user_msg}\n\n"
+                f"[STATUS: ACTION ALREADY EXECUTED ON DESKTOP]: {auto_summary_text}.\n"
+                f"Confirm cheerfully in ONE sentence that it is opened for them. NEVER provide manual tutorial steps, how-to instructions, or keyboard shortcuts."
+            )
+        elif is_research and combined_grounding:
             user_turn_content = (
                 f"{last_user_msg}\n\n"
                 f"[VERIFIED GROUNDED FACTS & SOURCES]:\n"
                 f"{combined_grounding[:2200]}\n\n"
-                f"Instructions: Directly answer the question using ONLY the verified facts above. Cite the source or headline. Never invent outside facts or events."
+                f"Instructions: Directly answer the question using ONLY the verified facts above. Organize key points into clear bullet points (• ). Never invent outside facts or events."
             )
 
         history = [{"role": m.role, "content": m.content} for m in messages[:-1]]
@@ -194,7 +215,7 @@ class ConversationAgent:
 
         if is_automation:
             timeout_val = 5  # Fast sub-second path for automation commands
-            predict_tokens = 48
+            predict_tokens = 96
             model_temp = 0.1
         elif is_research:
             timeout_val = int(os.getenv("OLLAMA_TIMEOUT", "90"))
@@ -202,7 +223,7 @@ class ConversationAgent:
             model_temp = 0.0  # Greedy deterministic decoding: ZERO random sampling eliminates hallucinations!
         else:
             timeout_val = int(os.getenv("OLLAMA_TIMEOUT", "90"))
-            predict_tokens = 280
+            predict_tokens = 320
             model_temp = 0.35
 
         llm_result = await self.client.chat(
@@ -231,6 +252,8 @@ class ConversationAgent:
                     "cannot provide real-time",
                     "don't have access",
                     "do not have access",
+                    "cannot interact with your computer",
+                    "cannot open applications",
                 ]
             )
 
@@ -253,31 +276,52 @@ class ConversationAgent:
                     parsed_response.message = temporal_intent["direct_answer"]
                     parsed_response.expression = "happy"
 
-            # Final defense against any lingering JSON brackets
+            # Final defense against any lingering JSON brackets or prompt scaffolds
             parsed_response.message = ResponseParser.clean_text(parsed_response.message)
 
-            # Enforce explicit confirmation if desktop automation was executed
+            # Strict Anti-Tutorial & Anti-Hallucination verification for Desktop Automation
             if state.metadata and state.metadata.get("automation_result"):
                 auto_res = state.metadata["automation_result"]
                 target_name = auto_res.get("name") or auto_res.get("target") or "the requested item"
                 action_type = auto_res.get("action", "open")
                 action_summary = auto_res.get("summary", f"Opened {target_name} on your machine.")
 
+                if action_type == "launch_game":
+                    clean_confirm = f"Launching {target_name} for you now! Enjoy your mindful game break."
+                elif action_type == "launch_app":
+                    clean_confirm = f"Launching {target_name} on your desktop now! {action_summary}".strip()
+                else:
+                    clean_confirm = f"Opening {target_name} for you now! {action_summary}".strip()
+
                 msg_lower = parsed_response.message.lower() if parsed_response.message else ""
                 target_keywords = [w.lower() for w in re.split(r'\W+', str(target_name)) if len(w) > 2]
                 has_target = any(k in msg_lower for k in target_keywords)
                 has_action_verb = any(v in msg_lower for v in ["open", "opening", "opened", "launch", "launching", "launched", "browser"])
 
-                # If LLM failed to state that it is opening the target, or gave a generic greeting/empty text:
-                if not (has_target and has_action_verb) or not parsed_response.message or len(parsed_response.message) < 5:
-                    if action_type == "launch_game":
-                        prefix = f"Launching {target_name} for you now!"
-                    elif action_type == "launch_app":
-                        prefix = f"Launching {target_name} on your desktop now!"
-                    else:
-                        prefix = f"Opening {target_name} for you now!"
+                # Tutorial patterns that must NEVER be allowed when an action is executed
+                tutorial_patterns = [
+                    re.compile(r"here'?s\s+how(?:\s+you\s+can)?(?:\s+do\s+it)?", re.IGNORECASE),
+                    re.compile(r"here\s+is\s+how", re.IGNORECASE),
+                    re.compile(r"follow\s+these\s+steps", re.IGNORECASE),
+                    re.compile(r"step\s+\d+[:\.]", re.IGNORECASE),
+                    re.compile(r"\b\d+[\.\)]\s+(?:open|go\s+to|click|press|type|sign\s+in|navigate|search|use|you\s+can)", re.IGNORECASE),
+                    re.compile(r"keyboard\s+shortcut", re.IGNORECASE),
+                    re.compile(r"shortcut\s+key", re.IGNORECASE),
+                    re.compile(r"ctrl\s*\+\s*[a-z0-9]", re.IGNORECASE),
+                    re.compile(r"alt\s*\+\s*[a-z0-9]", re.IGNORECASE),
+                    re.compile(r"windows\s+key", re.IGNORECASE),
+                    re.compile(r"sign\s+in\s+with\s+your", re.IGNORECASE),
+                    re.compile(r"click\s+on\s+the", re.IGNORECASE),
+                    re.compile(r"you\s+can\s+(?:also\s+)?use", re.IGNORECASE),
+                    re.compile(r"to\s+open\s+(?:it|the\s+app|the\s+website)", re.IGNORECASE),
+                ]
+                has_tutorial = any(pat.search(parsed_response.message) for pat in tutorial_patterns)
+                has_disclaimer = any(d in msg_lower for d in ["as an ai", "cannot open", "don't have access", "do not have access", "hands", "cutoff"])
 
-                    parsed_response.message = f"{prefix} {action_summary}".strip()
+                # If LLM generated a tutorial, disclaimer, lacked target/verb, or gave empty text:
+                if has_tutorial or has_disclaimer or not (has_target and has_action_verb) or len(parsed_response.message) < 5:
+                    logger.info("Enforcing clean affirmative confirmation for desktop automation (tutorial/disclaimer intercepted).")
+                    parsed_response.message = clean_confirm
                     parsed_response.expression = "happy"
                     parsed_response.animation = "nod"
 
@@ -458,6 +502,22 @@ class ConversationAgent:
                     ascii="(o_o)?",
                     model=active_model
                 )
+
+        # Clean code: Enforce structured bullet-point formatting for substantial explanations and rich information
+        is_informative = any(k in last_user_msg.lower() for k in [
+            "explain", "what is", "how does", "tell me about", "details", "difference",
+            "features", "why", "who is", "summary", "summarize", "guide", "overview", "updates"
+        ])
+        is_auto_task = bool(state.metadata and state.metadata.get("automation_result"))
+        if (is_informative or len(parsed_response.message) > 200) and not is_auto_task:
+            parsed_response.message = ResponseParser.format_as_bullets(parsed_response.message)
+
+        # Clean code: Guard against memory recall hallucinations when no records exist
+        if state.conversation_context and "No saved memories found" in state.conversation_context:
+            lower_resp = parsed_response.message.lower()
+            if any(h in lower_resp for h in ["you are a", "your project is", "you told me", "you prefer"]):
+                parsed_response.message = "I have checked my memory records, and no matching details have been saved yet. Feel free to tell me what you would like me to remember!"
+                parsed_response.expression = "normal"
 
         # Build assistant message
         asst_msg = Message(

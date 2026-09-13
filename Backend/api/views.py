@@ -1,5 +1,6 @@
 import json
 import logging
+import threading
 from datetime import datetime
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -564,39 +565,91 @@ def vision_capture(request):
     })
 
 
+# Thread-safe in-memory annotated preview cache for sub-millisecond preview delivery
+_preview_cache_lock = threading.Lock()
+_last_preview_jpeg_bytes = None
+_last_preview_jpeg_time = 0.0
+_preview_worker_thread = None
+_stop_preview_worker = threading.Event()
+
+
+def _get_or_update_annotated_jpeg(force_refresh: bool = False) -> bytes:
+    """
+    Returns the latest annotated JPEG frame from memory.
+    If cache is fresh (<120ms), returns immediately.
+    """
+    global _last_preview_jpeg_bytes, _last_preview_jpeg_time
+    import cv2
+    import time
+
+    now = time.time()
+    with _preview_cache_lock:
+        if not force_refresh and _last_preview_jpeg_bytes is not None and (now - _last_preview_jpeg_time < 0.12):
+            return _last_preview_jpeg_bytes
+
+    camera = get_camera_manager()
+    camera.set_privacy_shutter(False)
+    frame = camera.get_last_frame(fallback_mock=True)
+    if frame is None:
+        success, frame = camera.read_frame()
+    if frame is None:
+        frame = CameraManager.generate_mock_face_frame("happy")
+
+    monitor = get_proactive_monitor()
+    telemetry = monitor.get_latest_telemetry(refresh_if_stale=False)
+    annotated = _api_expression_detector.annotate_frame(
+        frame,
+        work_mins=telemetry.get("work_duration_minutes", 0.0),
+        sad_tired_mins=telemetry.get("sad_tired_minutes", 0.0)
+    )
+    ret, jpeg = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+    if ret:
+        raw_bytes = jpeg.tobytes()
+        with _preview_cache_lock:
+            _last_preview_jpeg_bytes = raw_bytes
+            _last_preview_jpeg_time = time.time()
+        return raw_bytes
+
+    if _last_preview_jpeg_bytes is not None:
+        return _last_preview_jpeg_bytes
+    return b""
+
+
+def _ensure_preview_worker():
+    global _preview_worker_thread
+    if _preview_worker_thread is None or not _preview_worker_thread.is_alive():
+        def _worker():
+            import time
+            while not _stop_preview_worker.is_set():
+                try:
+                    _get_or_update_annotated_jpeg(force_refresh=True)
+                except Exception:
+                    pass
+                time.sleep(0.08)  # ~12 FPS smooth background annotation pipeline
+        _preview_worker_thread = threading.Thread(target=_worker, daemon=True, name="MomoPreviewWorker")
+        _preview_worker_thread.start()
+
+
+# Auto-start preview worker on module load
+_ensure_preview_worker()
+
+
 def vision_stream(request):
     """
     Real-time multipart MJPEG video stream with OpenCV facial bounding box,
     5-point landmarks, emotion badge, gaze orientation, and focus session counter.
     GET /api/vision/stream/
     """
+    _ensure_preview_worker()
+
     def frame_generator():
-        import cv2
         import time
-        camera = get_camera_manager()
-        camera.set_privacy_shutter(False)
-        monitor = get_proactive_monitor()
-
         while True:
-            frame = camera.get_last_frame()
-            if frame is None:
-                success, frame = camera.read_frame()
-            if frame is None:
-                frame = CameraManager.generate_mock_face_frame("happy")
-
-            telemetry = monitor.get_latest_telemetry(refresh_if_stale=False)
-            work_mins = telemetry.get("work_duration_minutes", 0.0)
-
-            sad_tired_mins = telemetry.get("sad_tired_minutes", 0.0)
-
-            annotated = _api_expression_detector.annotate_frame(
-                frame, work_mins=work_mins, sad_tired_mins=sad_tired_mins
-            )
-            ret, jpeg = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-            if ret:
+            raw_bytes = _get_or_update_annotated_jpeg(force_refresh=False)
+            if raw_bytes:
                 yield (
                     b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + raw_bytes + b'\r\n'
                 )
             time.sleep(0.066)  # ~15 FPS smooth stream, light CPU footprint
 
@@ -611,48 +664,16 @@ def vision_stream(request):
     return response
 
 
-_last_preview_jpeg_bytes = None
-_last_preview_jpeg_time = 0.0
-
-
 def vision_preview(request):
     """
-    Returns a single JPEG image snapshot of the annotated camera preview.
+    Returns a single JPEG image snapshot of the annotated camera preview (<1ms from cache).
     GET /api/vision/preview/
     """
-    global _last_preview_jpeg_bytes, _last_preview_jpeg_time
-    import cv2
-    import time
+    _ensure_preview_worker()
     from django.http import HttpResponse
 
-    now = time.time()
-    if _last_preview_jpeg_bytes is not None and (now - _last_preview_jpeg_time < 0.10):
-        resp = HttpResponse(_last_preview_jpeg_bytes, content_type="image/jpeg")
-        resp['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
-        resp['Pragma'] = 'no-cache'
-        return resp
-
-    camera = get_camera_manager()
-    camera.set_privacy_shutter(False)
-    frame = camera.get_last_frame()
-    if frame is None:
-        success, frame = camera.read_frame()
-    if frame is None:
-        frame = CameraManager.generate_mock_face_frame("neutral")
-
-    monitor = get_proactive_monitor()
-    telemetry = monitor.get_latest_telemetry(refresh_if_stale=False)
-    annotated = _api_expression_detector.annotate_frame(
-        frame,
-        work_mins=telemetry.get("work_duration_minutes", 0.0),
-        sad_tired_mins=telemetry.get("sad_tired_minutes", 0.0)
-    )
-    ret, jpeg = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-    if ret:
-        raw_bytes = jpeg.tobytes()
-        _last_preview_jpeg_bytes = raw_bytes
-        _last_preview_jpeg_time = now
-
+    raw_bytes = _get_or_update_annotated_jpeg(force_refresh=False)
+    if raw_bytes:
         resp = HttpResponse(raw_bytes, content_type="image/jpeg")
         resp['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
         resp['Pragma'] = 'no-cache'

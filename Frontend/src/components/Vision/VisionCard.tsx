@@ -16,9 +16,10 @@ export const VisionCard: React.FC<VisionCardProps> = ({
 }) => {
   const [localTelemetry, setLocalTelemetry] = useState<VisionTelemetry | null>(telemetry || null);
   const [showLivePreview, setShowLivePreview] = useState<boolean>(true);
-  const [streamError, setStreamError] = useState<boolean>(false);
-  const [snapshotSrc, setSnapshotSrc] = useState<string>('/api/vision/preview/');
+  const [streamMode, setStreamMode] = useState<'snapshot' | 'mjpeg'>('snapshot');
+  const [snapshotSrc, setSnapshotSrc] = useState<string>('');
   const [scanning, setScanning] = useState(false);
+  const activeBlobUrlRef = React.useRef<string | null>(null);
 
   useEffect(() => {
     if (telemetry) {
@@ -29,27 +30,37 @@ export const VisionCard: React.FC<VisionCardProps> = ({
   useEffect(() => {
     if (!showLivePreview) return;
 
+    if (streamMode === 'mjpeg') {
+      setSnapshotSrc(`/api/vision/stream/?t=${Date.now()}`);
+      return;
+    }
+
     let isMounted = true;
     let timerId: any = null;
 
-    const loadNextFrame = () => {
+    const loadNextFrame = async () => {
       if (!isMounted) return;
-      const nextUrl = `/api/vision/preview/?t=${Date.now()}`;
-      const preloader = new Image();
-
-      preloader.onload = () => {
+      try {
+        const res = await fetch(`/api/vision/preview/?t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Preview fetch failed: ${res.status}`);
+        const blob = await res.blob();
         if (!isMounted) return;
-        setSnapshotSrc(nextUrl);
-        setStreamError(false);
-        timerId = setTimeout(loadNextFrame, 250);
-      };
 
-      preloader.onerror = () => {
+        const newBlobUrl = URL.createObjectURL(blob);
+        const oldUrl = activeBlobUrlRef.current;
+        activeBlobUrlRef.current = newBlobUrl;
+        setSnapshotSrc(newBlobUrl);
+        setStreamError(false);
+
+        if (oldUrl && oldUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(oldUrl);
+        }
+
+        timerId = setTimeout(loadNextFrame, 125); // ~8 FPS smooth live preview
+      } catch (err) {
         if (!isMounted) return;
         timerId = setTimeout(loadNextFrame, 1000);
-      };
-
-      preloader.src = nextUrl;
+      }
     };
 
     loadNextFrame();
@@ -57,8 +68,12 @@ export const VisionCard: React.FC<VisionCardProps> = ({
     return () => {
       isMounted = false;
       if (timerId) clearTimeout(timerId);
+      if (activeBlobUrlRef.current && activeBlobUrlRef.current.startsWith('blob:')) {
+        URL.revokeObjectURL(activeBlobUrlRef.current);
+        activeBlobUrlRef.current = null;
+      }
     };
-  }, [showLivePreview]);
+  }, [showLivePreview, streamMode]);
 
   const emotionEmojiMap: Record<string, string> = {
     happy: '😊 Happy',
@@ -92,7 +107,21 @@ export const VisionCard: React.FC<VisionCardProps> = ({
 
   const handleRefreshStream = () => {
     setStreamError(false);
-    setSnapshotSrc(`/api/vision/preview/?t=${Date.now()}`);
+    if (streamMode === 'mjpeg') {
+      setSnapshotSrc(`/api/vision/stream/?t=${Date.now()}`);
+    } else {
+      fetch(`/api/vision/preview/?t=${Date.now()}`, { cache: 'no-store' })
+        .then((res) => (res.ok ? res.blob() : Promise.reject(new Error('Failed'))))
+        .then((blob) => {
+          const newUrl = URL.createObjectURL(blob);
+          if (activeBlobUrlRef.current && activeBlobUrlRef.current.startsWith('blob:')) {
+            URL.revokeObjectURL(activeBlobUrlRef.current);
+          }
+          activeBlobUrlRef.current = newUrl;
+          setSnapshotSrc(newUrl);
+        })
+        .catch(() => setStreamError(true));
+    }
   };
 
   const handleManualCapture = async () => {
@@ -142,12 +171,21 @@ export const VisionCard: React.FC<VisionCardProps> = ({
               </span>
             </h3>
           </div>
-          <button
-            onClick={() => setShowLivePreview((prev) => !prev)}
-            className="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono transition-all border border-slate-700"
-          >
-            {showLivePreview ? 'Hide Camera' : 'Show Camera'}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setStreamMode((m) => (m === 'snapshot' ? 'mjpeg' : 'snapshot'))}
+              className="text-[10px] px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono transition-all border border-slate-700"
+              title="Toggle Between Smooth Snapshot & Direct MJPEG Stream"
+            >
+              {streamMode === 'mjpeg' ? '⚡ MJPEG' : '📸 Snapshot'}
+            </button>
+            <button
+              onClick={() => setShowLivePreview((prev) => !prev)}
+              className="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono transition-all border border-slate-700"
+            >
+              {showLivePreview ? 'Hide Camera' : 'Show Camera'}
+            </button>
+          </div>
         </div>
 
         <p className="text-xs text-slate-400 mb-3 leading-relaxed">
@@ -158,11 +196,13 @@ export const VisionCard: React.FC<VisionCardProps> = ({
         {showLivePreview && (
           <div className="relative mb-4 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 aspect-video flex items-center justify-center shadow-inner group">
             <img
-              src={snapshotSrc}
+              src={snapshotSrc || '/api/vision/preview/'}
               alt="MOMO Camera Preview"
               className="w-full h-full object-cover rounded-xl"
               onLoad={() => setStreamError(false)}
-              onError={() => setStreamError(true)}
+              onError={() => {
+                if (snapshotSrc) setStreamError(true);
+              }}
             />
 
             {streamError && (

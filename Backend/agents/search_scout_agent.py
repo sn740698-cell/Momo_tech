@@ -39,8 +39,9 @@ class SearchScoutAgent:
         clean_q = self.crawler.expand_query(last_user_msg)
         queries = [clean_q]
 
-        # Add targeted variant if applicable
-        if not any(w in clean_q.lower() for w in ["latest", "recent", "2026", "2025"]):
+        # Add targeted temporal variant ONLY if query seeks recent news or developments
+        has_temporal_intent = any(w in clean_q.lower() for w in ["current", "latest", "update", "happening", "today", "yesterday", "news", "trend", "status"])
+        if has_temporal_intent and not any(w in clean_q.lower() for w in ["2026", "2025", "2024"]):
             queries.append(f"{clean_q} 2026")
 
         all_candidates: List[Dict[str, Any]] = []

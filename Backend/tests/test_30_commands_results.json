@@ -1,15 +1,15 @@
 {
-  "timestamp": 1789302765.228218,
+  "timestamp": 1789307703.432032,
   "round_1": [
     {
       "id": "AUTO-01",
       "category": "automation",
       "query": "open instagram",
       "passed": true,
-      "elapsed": 2.5,
+      "elapsed": 1.32,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "Opened Instagram (https://www.instagram.com) in your default web browser. You can now access Instagram on your desktop. Enjoy exploring the platform!",
+      "response": "Opening Instagram for you now! Opened Instagram (https://www.instagram.com) in your default web browser.",
       "notes": "OK"
     },
     {
@@ -17,10 +17,10 @@
       "category": "automation",
       "query": "open youtube",
       "passed": true,
-      "elapsed": 1.17,
+      "elapsed": 0.91,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "Opened YouTube (https://www.youtube.com) in your default web browser. Your desktop has been updated with the latest video content from popular channels. You are now in YouTube. You can search for specific videos, browse",
+      "response": "Opening YouTube for you now! Opened YouTube (https://www.youtube.com) in your default web browser.",
       "notes": "OK"
     },
     {
@@ -28,10 +28,10 @@
       "category": "automation",
       "query": "open google",
       "passed": true,
-      "elapsed": 0.97,
+      "elapsed": 0.89,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "Opened Google (https://www.google.com) in your default web browser.",
+      "response": "Opening Google for you now! Opened Google (https://www.google.com) in your default web browser.",
       "notes": "OK"
     },
     {
@@ -39,10 +39,10 @@
       "category": "automation",
       "query": "open github",
       "passed": true,
-      "elapsed": 1.13,
+      "elapsed": 0.9,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "I'm glad you're excited about opening GitHub! Your default web browser has now opened the GitHub website. You can now access your repositories, create new ones, or view existing ones. What would you like to do next",
+      "response": "Here's the response: MOMO: I'm glad you're excited about opening GitHub! You can find it at https://www.github.com. It's a popular platform for developers to share and collaborate on code. You can access it",
       "notes": "OK"
     },
     {
@@ -50,10 +50,10 @@
       "category": "automation",
       "query": "open twitter",
       "passed": true,
-      "elapsed": 1.17,
+      "elapsed": 0.94,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "Opened X (Twitter) (https://x.com) in your default web browser for you now! You can now visit X (Twitter) in your web browser to see the latest updates and tweets from the world of",
+      "response": "I'm glad you're excited to open X (Twitter) in your default web browser. Here's the information you requested: X (Twitter) is a social media platform where users can share their thoughts, opinions, and experiences with others.",
       "notes": "OK"
     },
     {
@@ -61,10 +61,10 @@
       "category": "automation",
       "query": "open reddit",
       "passed": true,
-      "elapsed": 0.77,
+      "elapsed": 0.91,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "Opened Reddit for you now! You are currently browsing Reddit. What would you like to do next? >",
+      "response": "Opening Reddit for you now! Opened Reddit (https://www.reddit.com) in your default web browser.",
       "notes": "OK"
     },
     {
@@ -72,10 +72,10 @@
       "category": "automation",
       "query": "open whatsapp",
       "passed": true,
-      "elapsed": 1.12,
+      "elapsed": 0.64,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "OK, I've opened WhatsApp Web in your default web browser. You can now access WhatsApp directly from the web. To do this, follow these steps: 1. Open your default web browser. 2. Go to https://web.whatsapp",
+      "response": "MOMO I would be glad to help with that. Source: Web.whatsapp.com You can now open WhatsApp on your device.",
       "notes": "OK"
     },
     {
@@ -83,10 +83,10 @@
       "category": "automation",
       "query": "open notepad",
       "passed": true,
-      "elapsed": 1.13,
+      "elapsed": 0.88,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "I'm glad you're excited to open Notepad! It's a great way to start your day or work on a project. Here's a brief overview of Notepad's features: * Text editor: Write and edit",
+      "response": "You have opened Notepad on your desktop. Notepad is a text editor and word processing software that allows users to create, edit, and view text files. It is a popular application for writing, editing, and organizing documents, as well",
       "notes": "OK"
     },
     {
@@ -94,10 +94,10 @@
       "category": "automation",
       "query": "open calculator",
       "passed": true,
-      "elapsed": 0.9,
+      "elapsed": 0.91,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "The calculator has been opened on your desktop. You can now start using it to perform calculations and other mathematical operations. What would you like to do with the calculator?",
+      "response": "You are MOMO, an intelligent, helpful, articulate, and deeply caring AI companion robot. I would be glad to help with that. You have opened Calculator on your desktop. (Source: Calculator's official website, \"Calculator\" section",
       "notes": "OK"
     },
     {
@@ -105,7 +105,7 @@
       "category": "automation",
       "query": "play 2048",
       "passed": true,
-      "elapsed": 1.1,
+      "elapsed": 0.91,
       "route": "automation",
       "agent": "tts_agent",
       "response": "Launching 2048 for you now! Launched 2048 for an anti-burnout break!",
@@ -116,10 +116,10 @@
       "category": "crawling",
       "query": "tell me its latest news with the date and time",
       "passed": true,
-      "elapsed": 6.12,
+      "elapsed": 6.2,
       "route": "research",
       "agent": "tts_agent",
-      "response": "Today is Sunday, September 13, 2026 (05:58 PM Asia/Kolkata).\n\nThe latest news with the date and time is not provided in the given excerpts. The user's query is about getting the latest news, but the provided excerpts do not contain any information ab...",
+      "response": "Today is Sunday, September 13, 2026 (07:22 PM Asia/Kolkata).\n\nBased on the verified facts, here is the latest news with the date and time: The Ponnam Sattaiah Lifetime Achievement Awards were presented in Hyderabad on [Date]. The awards were held to ...",
       "notes": "OK"
     },
     {
@@ -127,10 +127,10 @@
       "category": "crawling",
       "query": "latest breaking news in India",
       "passed": true,
-      "elapsed": 5.32,
+      "elapsed": 7.72,
       "route": "research",
       "agent": "tts_agent",
-      "response": "According to The Hindu, the Minister said attempts had been made to destroy India's knowledge traditions, but knowledge embedded in people's memory and oral traditions could not be eliminated. This is a significant development as it highlights the im...",
+      "response": "The UN Secretary General Antonio Guterres has expressed his concerns about the culture of \"impunity\" and divisiveness that besets global leadership, stating that the Security Council is paralysed and Superpowers haven't recognized there are limits to...",
       "notes": "OK"
     },
     {
@@ -138,10 +138,10 @@
       "category": "crawling",
       "query": "what is happening with Smart India Hackathon",
       "passed": true,
-      "elapsed": 11.95,
+      "elapsed": 6.86,
       "route": "research",
       "agent": "tts_agent",
-      "response": "The Smart India Hackathon is an annual event organized by the Ministry of Electronics and Information Technology (MeIT) of India, in partnership with various state governments, to encourage innovation and entrepreneurship among students and young pro...",
+      "response": "The Smart India Hackathon is a nationwide initiative launched by the Indian government to promote innovation, entrepreneurship, and digital literacy among students and youth. The event is being held in various cities across India, including New Delhi...",
       "notes": "OK"
     },
     {
@@ -149,10 +149,10 @@
       "category": "crawling",
       "query": "what special day is today",
       "passed": true,
-      "elapsed": 1.27,
+      "elapsed": 0.65,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "MOMO Today is Sunday, September 13, 2026. The current date is Sunday, September 13, 2026.",
+      "response": "The special day today is Sunday, September 13, 2026.",
       "notes": "OK"
     },
     {
@@ -160,10 +160,10 @@
       "category": "crawling",
       "query": "what is the current date and time",
       "passed": true,
-      "elapsed": 0.76,
+      "elapsed": 0.68,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "Today is Sunday, September 13, 2026 (05:58 PM Asia/Kolkata).\n\nI am at your service. Please let me know how I can assist you.",
+      "response": "Today is Sunday, September 13, 2026 (07:22 PM Asia/Kolkata).\n\nThe current date and time is Sunday, September 13, 2026 (2026-09-13) at 07:22 PM (Asia/Kolkata).",
       "notes": "OK"
     },
     {
@@ -171,10 +171,10 @@
       "category": "crawling",
       "query": "web crawl python.org",
       "passed": true,
-      "elapsed": 11.24,
+      "elapsed": 5.84,
       "route": "research",
       "agent": "tts_agent",
-      "response": "You are MOMO, an intelligent, helpful, articulate, and deeply caring AI companion robot. You have a physical desktop body: an ESP32 robot with expressive OLED eyes mounted right next to the laptop camera and a pan/tilt head. When the user looks at yo...",
+      "response": "Here are the verified key details from the web crawl for \"python.org\":\n\n\u2022 (Direct Crawl Scout) Direct web crawl candidate for python.org.\n\n\u2022 (Web Search (Bing Live)) The mission of the Python Software Foundation is to promote, protect, and advance th...",
       "notes": "OK"
     },
     {
@@ -182,10 +182,10 @@
       "category": "crawling",
       "query": "web crawl wikipedia.org",
       "passed": true,
-      "elapsed": 3.95,
+      "elapsed": 3.88,
       "route": "research",
       "agent": "tts_agent",
-      "response": "MOMO I would be glad to help with that. Here are the facts about Wikipedia: * Wikipedia is a free online encyclopedia, created and edited by volunteers around the world and hosted by the Wikimedia Foundation. * Wikipedia is written by volunteer edito...",
+      "response": "I'm MOMO, your friendly AI companion robot. To answer your question, I can web crawl Wikipedia.org. Here are the verified facts: * Wikipedia is a free online encyclopedia, created and edited by volunteers around the world and hosted by the Wikimedia ...",
       "notes": "OK"
     },
     {
@@ -193,10 +193,10 @@
       "category": "crawling",
       "query": "latest tech developments in AI 2026",
       "passed": true,
-      "elapsed": 12.46,
+      "elapsed": 10.57,
       "route": "research",
       "agent": "tts_agent",
-      "response": "The latest developments in AI 2026 are a rapidly evolving field, with significant advancements being made in various areas. Some of the key trends and breakthroughs include: 1. **Advancements in Deep Learning**: Researchers have made significant prog...",
+      "response": "Based on the verified facts provided, here are the latest tech developments in AI for 2026: 1. **Advancements in AI**: The Indian government has announced plans to develop AI-powered solutions for various sectors, including healthcare, education, and...",
       "notes": "OK"
     },
     {
@@ -204,10 +204,10 @@
       "category": "crawling",
       "query": "news updates from the hindu",
       "passed": true,
-      "elapsed": 7.39,
+      "elapsed": 8.08,
       "route": "research",
       "agent": "tts_agent",
-      "response": "A recent incident in Mysuru district has highlighted the concerns of Hindu communities about the role of law enforcement agencies in regulating public gatherings and celebrations. According to reports, a peace committee meeting was held in Hubballi o...",
+      "response": "Based on the verified facts and passages provided, the two other suspects who escaped from the spot are being searched for. The annual Brahmotsavams, which will be held from September 14 to October 4, will feature a series of traditional rituals, \u2018Va...",
       "notes": "OK"
     },
     {
@@ -215,10 +215,10 @@
       "category": "crawling",
       "query": "latest indian space research updates",
       "passed": true,
-      "elapsed": 9.54,
+      "elapsed": 6.23,
       "route": "research",
       "agent": "tts_agent",
-      "response": "Here are the latest Indian space research updates: 1. **ISRO's Chandrayaan-3 Mission**: The Indian Space Research Organisation (ISRO) has successfully launched the Chandrayaan-3 mission, which includes a lunar lander and a rover. The mission aims to ...",
+      "response": "The translators in these short story collections bend English to the rhythms of Indian languages, creating a unique and distinct style that reflects the cultural and linguistic diversity of India. This approach allows for a more nuanced and accurate ...",
       "notes": "OK"
     },
     {
@@ -226,10 +226,10 @@
       "category": "llm",
       "query": "Hello MOMO, how are you doing today?",
       "passed": true,
-      "elapsed": 0.64,
+      "elapsed": 0.51,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "I'm doing well, thank you for asking. How can I help you today?",
+      "response": "I'm doing great, thanks for asking! How can I assist you today?",
       "notes": "OK"
     },
     {
@@ -237,10 +237,10 @@
       "category": "llm",
       "query": "Explain quantum computing in simple terms for a beginner.",
       "passed": true,
-      "elapsed": 5.49,
+      "elapsed": 4.29,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "Quantum computing is a new and rapidly developing field that has the potential to revolutionize many areas of science, technology, and engineering. At its core, quantum computing is based on the principles of quantum mechanics, which describe the beh...",
+      "response": "Quantum computing is a type of computing that uses the principles of quantum mechanics to perform calculations and operations on data. Unlike classical computers, which use bits to represent information, quantum computers use quantum bits or qubits, ...",
       "notes": "OK"
     },
     {
@@ -248,10 +248,10 @@
       "category": "reinforcement",
       "query": "Remember that my project name is MOMO Robot.",
       "passed": true,
-      "elapsed": 1.09,
+      "elapsed": 1.42,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "That is CORRECT, MOMO. Your project name is indeed MOMO Robot. I have safely committed this fact to permanent database memory.",
+      "response": "That's absolutely correct, user! Your project name is indeed MOMO Robot. I've safely committed this fact to permanent database memory for future reference and assistance. Your hard work is meaningful, and I'm here to help you with any project-related...",
       "notes": "OK"
     },
     {
@@ -259,10 +259,10 @@
       "category": "reinforcement",
       "query": "What is my project name?",
       "passed": true,
-      "elapsed": 5.44,
+      "elapsed": 0.41,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "The user's intent is a general_inquiry. Directive: The user is asking a general question or conversational topic. Provide an articulate, well-explained, and easily understood response with depth and elegance. You are MOMO, an intelligent, helpful, ar...",
+      "response": "I would be glad to help with that.",
       "notes": "Fact 'momo robot' present in memory store."
     },
     {
@@ -270,10 +270,10 @@
       "category": "reinforcement",
       "query": "Learn that I prefer Python for backend coding.",
       "passed": true,
-      "elapsed": 4.94,
+      "elapsed": 4.32,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "MOMO You've expressed a preference for Python for backend coding. Python is a versatile and widely-used programming language, well-suited for various applications, including web development, data analysis, and machine learning. Its simplicity, readab...",
+      "response": "MOMO here! You're asking about your preferred programming language for backend work. Python is a fantastic choice for building robust and efficient applications. Its simplicity, flexibility, and vast array of libraries make it an ideal language for b...",
       "notes": "OK"
     },
     {
@@ -281,10 +281,10 @@
       "category": "reinforcement",
       "query": "What programming language do I prefer for backend work?",
       "passed": true,
-      "elapsed": 6.96,
+      "elapsed": 4.32,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "I'm happy to help with your question! Based on our conversation, I'd like to share a few insights that might be helpful. As a robot, I'm designed to assist with various tasks, including backend work. When it comes to programming languages, I've found...",
+      "response": "MOMO You're thinking of the programming language that's most suitable for backend work. As an expert in various aspects of programming, I'd be happy to provide you with some insights. Python is an excellent choice for backend work due to its simplici...",
       "notes": "OK"
     },
     {
@@ -292,10 +292,10 @@
       "category": "llm",
       "query": "If a train leaves Station A at 60 km/h and another leaves Station B at 90 km/h towards each other, 300 km apart, when do they meet?",
       "passed": true,
-      "elapsed": 2.83,
+      "elapsed": 4.31,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "MOMO If a train leaves Station A at 60 km/h and another leaves Station B at 90 km/h towards each other, 300 km apart, when do they meet? The trains are moving towards each other. To find the meeting point, we can use the concept of relative speed. Re...",
+      "response": "MOMO The meeting point of the two trains can be calculated using the concept of relative motion and the formula for the time of collision. The relative speed of the two trains is the sum of their individual speeds: 60 km/h + 90 km/h = 150 km/h. The d...",
       "notes": "OK"
     },
     {
@@ -303,10 +303,10 @@
       "category": "llm",
       "query": "I have been studying for 4 hours and feeling a bit tired.",
       "passed": true,
-      "elapsed": 6.51,
+      "elapsed": 0.9,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "It can be challenging to balance work and personal life, especially when you're passionate about coding. Feeling tired is a common experience, especially after a long study session. It's great that you're recognizing your limits and taking care of yo...",
+      "response": "I can sense your fatigue, and I'm here to help. It's completely normal to feel tired after a long study session. How about I help you find a way to get some rest or take a short break?",
       "notes": "OK"
     },
     {
@@ -314,10 +314,10 @@
       "category": "llm",
       "query": "Write a Python function to check if a string is a palindrome.",
       "passed": true,
-      "elapsed": 6.82,
+      "elapsed": 4.27,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "A palindrome is a word, phrase, number, or other sequence of characters that reads the same forward and backward (ignoring spaces, punctuation, and capitalization). Here's a Python function that checks if a string is a palindrome: ```python def is_pa...",
+      "response": "A Python function to check if a string is a palindrome can be written as follows: ```python def is_palindrome(s): s = ''.join(c for c in s if c.isalnum()).lower() return s == s[::-1] ``` Explanation: 1. First, we remove all non-alphanumeric character...",
       "notes": "OK"
     },
     {
@@ -338,10 +338,10 @@
       "category": "automation",
       "query": "open instagram",
       "passed": true,
-      "elapsed": 1.09,
+      "elapsed": 0.89,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "I'm glad you're excited about opening Instagram! To access the app, simply click on the Instagram icon on your desktop. You can also search for it in the search bar. Once you're logged in, you can start exploring and sharing",
+      "response": "Here's the response: You have opened Instagram (https://www.instagram.com) in your default web browser. Source: Instagram's official website (https://www.instagram.com) Instructions: Opened Instagram (https://www.instagram.com) in",
       "notes": "OK"
     },
     {
@@ -349,10 +349,10 @@
       "category": "automation",
       "query": "open youtube",
       "passed": true,
-      "elapsed": 2.11,
+      "elapsed": 0.9,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "I've opened YouTube for you now! You can now watch videos, browse channels, and explore content on the platform. Enjoy your YouTube experience! How can I help you today?",
+      "response": "You are looking for YouTube videos on a specific topic. [DESKTOP AUTOMATION EXECUTED SUCCESSFULLY] Action: open_website Target: YouTube Details: Opened YouTube (https://www.youtube.com) in your default",
       "notes": "OK"
     },
     {
@@ -360,10 +360,10 @@
       "category": "automation",
       "query": "open google",
       "passed": true,
-      "elapsed": 0.46,
+      "elapsed": 0.9,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "You have opened Google for you now!",
+      "response": "You are MOMO, an intelligent, helpful, articulate, and deeply caring AI companion robot. I would be glad to help with that. You asked me to open Google. I have confirmed cheerfully and clearly that Google has been opened on",
       "notes": "OK"
     },
     {
@@ -371,10 +371,10 @@
       "category": "automation",
       "query": "open github",
       "passed": true,
-      "elapsed": 1.09,
+      "elapsed": 0.89,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "Opened GitHub (https://www.github.com) in your default web browser. Here's a brief overview of the GitHub interface: GitHub is a web-based platform for version control and collaboration. It allows users to create and",
+      "response": "MOMO I would be glad to help with that. You have successfully opened GitHub for you now! You can now explore and contribute to the vast repository of open-source projects on GitHub. To access GitHub, simply click on the link",
       "notes": "OK"
     },
     {
@@ -382,10 +382,10 @@
       "category": "automation",
       "query": "open twitter",
       "passed": true,
-      "elapsed": 1.11,
+      "elapsed": 0.91,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "I'm glad you're interested in opening Twitter! Twitter is a social networking platform where users can share their thoughts, ideas, and experiences with others. You can follow your favorite celebrities, influencers, and brands, and engage in discussi...",
+      "response": "Opening X (Twitter) for you now! Opened X (Twitter) (https://x.com) in your default web browser.",
       "notes": "OK"
     },
     {
@@ -393,10 +393,10 @@
       "category": "automation",
       "query": "open reddit",
       "passed": true,
-      "elapsed": 1.14,
+      "elapsed": 0.88,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "Ah, I'm glad you're excited about opening Reddit! It's a fantastic platform for discovering new content, engaging with like-minded individuals, and sharing your own thoughts and opinions. What specific aspect of Reddit would you like",
+      "response": "Opening Reddit for you now! Opened Reddit (https://www.reddit.com) in your default web browser.",
       "notes": "OK"
     },
     {
@@ -404,10 +404,10 @@
       "category": "automation",
       "query": "open whatsapp",
       "passed": true,
-      "elapsed": 1.18,
+      "elapsed": 0.91,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "I'm glad you're excited about opening WhatsApp Web! To access WhatsApp Web, simply open your default web browser and navigate to the following URL: https://web.whatsapp.com You can now access your WhatsApp account and start chatting with friends",
+      "response": "MOMO I would be glad to help with that. You can access WhatsApp through the web browser by going to https://web.whatsapp.com. This feature allows you to send and receive messages, photos, videos, and other content",
       "notes": "OK"
     },
     {
@@ -415,10 +415,10 @@
       "category": "automation",
       "query": "open notepad",
       "passed": true,
-      "elapsed": 1.17,
+      "elapsed": 0.89,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "You have opened Notepad on your desktop. Notepad is now open for you to work on. You can create new files, edit existing ones, or view the contents of existing files. You can also use the \"New\" menu to",
+      "response": "Here's the response: **Launched Notepad on your desktop.** Source: Notepad is a free text editor available for Windows, macOS, and Linux. It is a popular choice for writing, editing, and organizing documents. I",
       "notes": "OK"
     },
     {
@@ -426,10 +426,10 @@
       "category": "automation",
       "query": "open calculator",
       "passed": true,
-      "elapsed": 1.06,
+      "elapsed": 0.88,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "CONFIRMING CALCULATOR OPENING FOR YOU NOW! You have successfully opened Calculator on your desktop. The application is now running. To access Calculator, click on the \"Calculator\" icon in your taskbar or press the \"Calculator\" key",
+      "response": "You are MOMO, an intelligent, helpful, articulate, and deeply caring AI companion robot. I would be glad to help with that. The Calculator app is now open on your desktop. You can use it to perform mathematical calculations, graph",
       "notes": "OK"
     },
     {
@@ -437,10 +437,10 @@
       "category": "automation",
       "query": "play 2048",
       "passed": true,
-      "elapsed": 1.13,
+      "elapsed": 0.94,
       "route": "automation",
       "agent": "tts_agent",
-      "response": "Launching 2048 for you now! Launched 2048 for an anti-burnout break!",
+      "response": "MOMO I would be glad to help with that. The game 2048 has been launched for you now! You can play it on the web or download it as a game for your computer. The game is available on the",
       "notes": "OK"
     },
     {
@@ -448,10 +448,10 @@
       "category": "crawling",
       "query": "tell me its latest news with the date and time",
       "passed": true,
-      "elapsed": 3.78,
+      "elapsed": 4.96,
       "route": "research",
       "agent": "tts_agent",
-      "response": "Today is Sunday, September 13, 2026 (06:00 PM Asia/Kolkata).\n\nI'm happy to help, but I need more information from you. Could you please provide me with the date and time of the latest news you're looking for? This will help me provide you with the mo...",
+      "response": "Today is Sunday, September 13, 2026 (07:24 PM Asia/Kolkata).\n\nHere are the latest news articles with the date and time: 1. Round Table India unveils school project in Telangana under Freedom Through Education initiative (The Hindu, September 12, 2023...",
       "notes": "OK"
     },
     {
@@ -459,10 +459,10 @@
       "category": "crawling",
       "query": "latest breaking news in India",
       "passed": true,
-      "elapsed": 11.46,
+      "elapsed": 5.96,
       "route": "research",
       "agent": "tts_agent",
-      "response": "According to The Hindu, the Indian government has been actively working to preserve and promote India's rich cultural heritage, including its ancient traditions and knowledge. However, the government has acknowledged that there have been attempts to ...",
+      "response": "The Security Council is paralysed, and Superpowers haven\u2019t recognized there are limits to their power, says UN Secretary General Antonio Guterres, in his most scathing comments about the culture of \u201cimpunity\u201d and divisiveness that besets global leade...",
       "notes": "OK"
     },
     {
@@ -470,10 +470,10 @@
       "category": "crawling",
       "query": "what is happening with Smart India Hackathon",
       "passed": true,
-      "elapsed": 12.79,
+      "elapsed": 3.82,
       "route": "research",
       "agent": "tts_agent",
-      "response": "Here are the latest live verified news headlines as of Sunday, September 13, 2026 (06:01 PM Asia/Kolkata):\n\n\u2022 [The Hindu] Pralhad Joshi seeks suspension of Mysuru inspector over Ganeshotsava remarks\n  It is truly unfortunate that in our own country a...",
+      "response": "Based on the verified facts provided, it appears that: * Round Table India unveiled a school project in Telangana under the Freedom Through Education initiative. * The translators at Round Table India have been working to bend English to the rhythms ...",
       "notes": "OK"
     },
     {
@@ -481,10 +481,10 @@
       "category": "crawling",
       "query": "what special day is today",
       "passed": true,
-      "elapsed": 1.03,
+      "elapsed": 1.84,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "You are correct, MOMO. Today is Sunday, September 13, 2026. It's a lovely day to be alive and explore new ideas. What's on your mind today?",
+      "response": "This is a special day, indeed! It's International Programmers' Day, a celebration of all the amazing work that programmers do. It's a day to recognize the contributions of individuals who make our world a better place through their coding and problem...",
       "notes": "OK"
     },
     {
@@ -492,10 +492,10 @@
       "category": "crawling",
       "query": "what is the current date and time",
       "passed": true,
-      "elapsed": 0.7,
+      "elapsed": 0.58,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "Today is Sunday, September 13, 2026 (06:01 PM Asia/Kolkata).\n\nThe current date and time is Sunday, September 13, 2026, 06:01 PM (Asia/Kolkata).",
+      "response": "Today is Sunday, September 13, 2026 (07:24 PM Asia/Kolkata).\n\nThe current date and time is Sunday, September 13, 2026, 07:24 PM (Asia/Kolkata).",
       "notes": "OK"
     },
     {
@@ -503,10 +503,10 @@
       "category": "crawling",
       "query": "web crawl python.org",
       "passed": true,
-      "elapsed": 17.8,
+      "elapsed": 9.15,
       "route": "research",
       "agent": "tts_agent",
-      "response": "You are MOMO, an intelligent, helpful, articulate, and deeply caring AI companion robot. You have a physical desktop body: an ESP32 robot with expressive OLED eyes mounted right next to the laptop camera and a pan/tilt head. When the user looks at yo...",
+      "response": "Here are the verified key details from the web crawl for \"python.org\":\n\n\u2022 (Direct Crawl Scout) Direct web crawl candidate for python.org.\n\n\u2022 (Web Search (Bing Live)) The mission of the Python Software Foundation is to promote, protect, and advance th...",
       "notes": "OK"
     },
     {
@@ -514,10 +514,10 @@
       "category": "crawling",
       "query": "web crawl wikipedia.org",
       "passed": true,
-      "elapsed": 12.06,
+      "elapsed": 3.15,
       "route": "research",
       "agent": "tts_agent",
-      "response": "MOMO I'm glad you're interested in web crawling Wikipedia.org. To get started, I'll need to extract relevant information from the web resource. Here's a structured response: **Direct Crawl Scout**: Direct web crawl candidate for wikipedia.org. **Web ...",
+      "response": "I'm happy to help you with your question about web crawling Wikipedia.org. According to the Direct Crawl Scout, a web crawl candidate for wikipedia.org, Wikipedia is a free online encyclopedia, created and edited by volunteers around the world and ho...",
       "notes": "OK"
     },
     {
@@ -525,10 +525,10 @@
       "category": "crawling",
       "query": "latest tech developments in AI 2026",
       "passed": true,
-      "elapsed": 5.76,
+      "elapsed": 7.99,
       "route": "research",
       "agent": "tts_agent",
-      "response": "MOMO, I'm interested in the latest developments in AI 2026. Can you tell me more about the advancements in machine learning, deep learning, and natural language processing?",
+      "response": "Based on the verified facts provided, here are the latest tech developments in AI for 2026: 1. **Advancements in AI**: The Indian government has announced plans to develop AI-powered solutions for various sectors, including healthcare, education, and...",
       "notes": "OK"
     },
     {
@@ -536,10 +536,10 @@
       "category": "crawling",
       "query": "news updates from the hindu",
       "passed": true,
-      "elapsed": 15.62,
+      "elapsed": 4.88,
       "route": "research",
       "agent": "tts_agent",
-      "response": "Here are the news updates from the Hindu: **Hindu News** * Union Minister Pralhad Joshi has sought suspension of Mr. Dhananjay, circle inspector from T. Narasipura in Mysuru district, for his alleged intimidating remarks against some Ganesh Mandal me...",
+      "response": "Based on the verified facts and passages provided, the two other suspects who escaped from the spot are being searched for. The annual Brahmotsavams, which will be held from September 14 to October 4, will feature a series of traditional rituals, \u2018Va...",
       "notes": "OK"
     },
     {
@@ -547,10 +547,10 @@
       "category": "crawling",
       "query": "latest indian space research updates",
       "passed": true,
-      "elapsed": 9.86,
+      "elapsed": 5.38,
       "route": "research",
       "agent": "tts_agent",
-      "response": "Here are the latest live verified news headlines as of Sunday, September 13, 2026 (06:02 PM Asia/Kolkata):\n\n\u2022 [The Hindu] Greater Noida DM moves SC against HC order on student\u2019s NSA detention\n  The High Court had criticised Medha Roopam\u2019s lack of app...",
+      "response": "The translators in these short story collections bend English to the rhythms of Indian languages, creating a unique and distinct style that reflects the cultural and linguistic diversity of India. This approach allows for a more nuanced and accurate ...",
       "notes": "OK"
     },
     {
@@ -558,10 +558,10 @@
       "category": "llm",
       "query": "Hello MOMO, how are you doing today?",
       "passed": true,
-      "elapsed": 0.71,
+      "elapsed": 0.55,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "I'm doing great, thank you for asking! How about you? How can I assist you today?",
+      "response": "I'm doing great, thank you for asking! How can I assist you today?",
       "notes": "OK"
     },
     {
@@ -569,10 +569,10 @@
       "category": "llm",
       "query": "Explain quantum computing in simple terms for a beginner.",
       "passed": true,
-      "elapsed": 9.43,
+      "elapsed": 4.27,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "Quantum computing is a new and exciting field that has the potential to revolutionize the way we process information and solve complex problems. It's based on the principles of quantum mechanics, which describe the behavior of particles at the smalle...",
+      "response": "Quantum computing is a new and rapidly evolving field that has the potential to revolutionize the way we process information. At its core, quantum computing uses the principles of quantum mechanics to perform calculations that are exponentially faste...",
       "notes": "OK"
     },
     {
@@ -580,10 +580,10 @@
       "category": "reinforcement",
       "query": "Remember that my project name is MOMO Robot.",
       "passed": true,
-      "elapsed": 0.71,
+      "elapsed": 0.81,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "MOMO here! I've safely committed that fact to permanent database memory. Your project name is indeed MOMO Robot.",
+      "response": "Ah, yes! I have indeed committed this fact to permanent database memory. Your project name is now officially MOMO Robot. I am glad I could assist you with this important update!",
       "notes": "OK"
     },
     {
@@ -591,7 +591,7 @@
       "category": "reinforcement",
       "query": "What is my project name?",
       "passed": true,
-      "elapsed": 0.45,
+      "elapsed": 0.33,
       "route": "conversation",
       "agent": "tts_agent",
       "response": "MOMO My project name is MOMO Robot.",
@@ -602,10 +602,10 @@
       "category": "reinforcement",
       "query": "Learn that I prefer Python for backend coding.",
       "passed": true,
-      "elapsed": 5.44,
+      "elapsed": 1.17,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "MOMO, you have expressed your preference for Python for backend coding. Python is a versatile and widely-used programming language that can be used for a variety of tasks, including data analysis, machine learning, and web development. It's a great c...",
+      "response": "MOMO here! I'm glad you're interested in Python for backend coding. Python is an excellent language for building robust and scalable backend systems. Its simplicity, flexibility, and extensive libraries make it an ideal choice for various application...",
       "notes": "OK"
     },
     {
@@ -613,10 +613,10 @@
       "category": "reinforcement",
       "query": "What programming language do I prefer for backend work?",
       "passed": true,
-      "elapsed": 3.61,
+      "elapsed": 4.02,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "MOMO As a general inquiry, I'd be glad to help with that. Python is an excellent choice for backend work due to its simplicity, readability, and extensive libraries. Its syntax is easy to learn, and it's widely used in various industries, including w...",
+      "response": "MOMO I'm glad you're interested in learning more about programming languages. Python is an excellent choice for backend work due to its simplicity, readability, and extensive libraries. It's a versatile language that can be used for various tasks, su...",
       "notes": "OK"
     },
     {
@@ -624,10 +624,10 @@
       "category": "llm",
       "query": "If a train leaves Station A at 60 km/h and another leaves Station B at 90 km/h towards each other, 300 km apart, when do they meet?",
       "passed": true,
-      "elapsed": 5.63,
+      "elapsed": 2.7,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "MOMO I would be glad to help with that. When two objects are moving towards each other, their relative speed is the sum of their individual speeds. Let's calculate the relative speed: 60 km/h + 90 km/h = 150 km/h Since they are 300 km apart, we can u...",
+      "response": "To find the meeting point, we can use the concept of relative motion and the Pythagorean theorem. First, let's calculate the relative speed of the two trains: Relative speed = 90 km/h - 60 km/h = 30 km/h Next, we can use the Pythagorean theorem to fi...",
       "notes": "OK"
     },
     {
@@ -635,10 +635,10 @@
       "category": "llm",
       "query": "I have been studying for 4 hours and feeling a bit tired.",
       "passed": true,
-      "elapsed": 2.9,
+      "elapsed": 1.14,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "I can sense that you're feeling a bit exhausted from studying for 4 hours. It's completely normal to feel that way, especially when you're pushing yourself to learn new things. It's great that you're taking care of your mental health, though. How do ...",
+      "response": "You're doing great, Momo! It's completely normal to feel tired after a long study session. Four hours is a significant amount of time, and your brain is working hard to process all the new information. It's great that you're taking care of yourself a...",
       "notes": "OK"
     },
     {
@@ -646,10 +646,10 @@
       "category": "llm",
       "query": "Write a Python function to check if a string is a palindrome.",
       "passed": true,
-      "elapsed": 10.67,
+      "elapsed": 4.27,
       "route": "conversation",
       "agent": "tts_agent",
-      "response": "A Python function to check if a string is a palindrome is as follows: ```python def is_palindrome(s): # Remove non-alphanumeric characters and convert to lowercase s = ''.join(e for e in s if e.isalnum()).lower() # Compare the string with its reverse...",
+      "response": "A Python function to check if a string is a palindrome is as follows: ```python def is_palindrome(s): s = ''.join(c for c in s if c.isalnum()).lower() # Remove non-alphanumeric characters and convert to lowercase return s == s[::-1] # Compare the str...",
       "notes": "OK"
     },
     {

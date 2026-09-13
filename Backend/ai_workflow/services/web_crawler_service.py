@@ -553,8 +553,19 @@ class LiveWebCrawlerService:
             if wiki_items:
                 items.extend(wiki_items)
 
+        # 1.5. Direct National News Feeds for live news & current events (The Hindu, NDTV, Times of India, Indian Express)
+        is_news_intent = any(w in q_lower for w in ["news", "headline", "breaking", "happening", "yesterday", "today's events", "current events", "the hindu", "ndtv"])
+        if is_news_intent:
+            raw_keywords = [
+                w for w in re.sub(r"[^\w\s]", "", expanded_q).split()
+                if len(w) > 3 and w.lower() not in ["what", "happened", "with", "yesterday", "today", "show", "tell", "news", "give", "please"]
+            ]
+            direct_news = await self.fetch_direct_national_news(keywords=raw_keywords, max_results=max_results)
+            if direct_news:
+                items.extend(direct_news)
+
         # 2. Universal Web Search via Bing Live Search Engine (Fast, live, authoritative)
-        if not items:
+        if len(items) < max_results:
             bing_results = await self.fetch_bing_search(query=expanded_q, max_results=max_results + 1)
             if bing_results:
                 items.extend(bing_results)
@@ -564,16 +575,6 @@ class LiveWebCrawlerService:
             wiki_search = await self.fetch_wikipedia_search(query=expanded_q, max_results=max_results)
             if wiki_search:
                 items.extend(wiki_search)
-
-        # 5. National News Fallback if news/current event related
-        if not items and any(w in q_lower for w in ["news", "happening", "india", "breaking", "update", "latest", "yesterday"]):
-            raw_keywords = [
-                w for w in re.sub(r"[^\w\s]", "", expanded_q).split()
-                if len(w) > 3 and w.lower() not in ["what", "happened", "with", "yesterday", "today", "show", "tell", "news"]
-            ]
-            direct_news = await self.fetch_direct_national_news(keywords=raw_keywords, max_results=max_results)
-            if direct_news:
-                items.extend(direct_news)
 
         if not items:
             return []

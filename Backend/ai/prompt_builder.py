@@ -29,7 +29,8 @@ class PromptBuilder:
         work_duration_minutes: float = 0.0,
         proactive_trigger: Optional[str] = None,
         query_decomposition: Optional[Dict[str, Any]] = None,
-        reinforced_rules: Optional[List[str]] = None
+        reinforced_rules: Optional[List[str]] = None,
+        web_grounding: Optional[str] = None
     ) -> str:
         prompt_parts = [BASE_SYSTEM_PROMPT]
 
@@ -72,10 +73,22 @@ class PromptBuilder:
         if perception_block:
             prompt_parts.append("\n[USER EMOTION & PERCEPTION TELEMETRY]\n" + "\n".join(perception_block))
 
-        # Long-term memory block
+        # Long-term memory block (facts about user only)
         if memories and len(memories) > 0:
             memory_lines = [f"- {m}" for m in memories]
             prompt_parts.append("\nSTORED FACTS ABOUT USER:\n" + "\n".join(memory_lines))
+
+        # Verified Real-Time Web Research & Grounded Passages (Anti-Hallucination)
+        if web_grounding:
+            prompt_parts.append(
+                f"\n[VERIFIED REAL-TIME WEB RESEARCH & GROUNDED PASSAGES]:\n"
+                f"{web_grounding}\n\n"
+                f"CRITICAL ANTI-HALLUCINATION REQUIREMENT:\n"
+                f"- You are operating in strict factual extraction mode.\n"
+                f"- Answer the user's specific inquiry using ONLY the verified facts and passages provided above.\n"
+                f"- Do NOT fabricate, extrapolate, or invent details, statistics, numbers, dates, or names.\n"
+                f"- If the crawled passages do not mention a requested detail, state clearly what the source confirms and note what is unconfirmed."
+            )
 
         # Active reinforced rules taught by user
         if reinforced_rules and len(reinforced_rules) > 0:

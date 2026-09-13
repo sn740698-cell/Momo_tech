@@ -100,23 +100,50 @@ class CameraManager:
 
     def _capture_worker(self):
         """Continuously pulls frames from camera into _last_frame buffer."""
+        consecutive_failures = 0
         while not self._stop_worker.is_set():
-            if self.privacy_shutter_closed or self._cap is None:
+            if self.privacy_shutter_closed:
+                time.sleep(0.1)
+                continue
+
+            with self._lock:
+                cap = self._cap
+
+            if cap is None or not cap.isOpened():
                 time.sleep(0.1)
                 continue
 
             try:
-                ret, frame = self._cap.read()
+                ret, frame = cap.read()
                 if ret and frame is not None:
+                    consecutive_failures = 0
                     with self._lock:
                         self._last_frame = frame
                         self._last_frame_time = time.time()
-                    time.sleep(0.002)  # Tiny yield to prevent CPU spinning while keeping pace with hardware
+                    time.sleep(0.005)  # Smooth ~30-60 FPS capture with yield
                 else:
-                    time.sleep(0.02)
+                    consecutive_failures += 1
+                    if consecutive_failures > 30 and not self.privacy_shutter_closed:
+                        # Camera may have disconnected or stalled; trigger reconnect
+                        logger.warning("Camera capture stalled; triggering reconnect...")
+                        self._reconnect_camera()
+                        consecutive_failures = 0
+                    time.sleep(0.03)
             except Exception as e:
                 logger.debug(f"Capture worker read error: {e}")
                 time.sleep(0.05)
+
+    def _reconnect_camera(self):
+        """Gracefully re-opens the capture device if it stalled."""
+        with self._lock:
+            if self._cap is not None:
+                try:
+                    self._cap.release()
+                except Exception:
+                    pass
+                self._cap = None
+        # Attempt restart outside the lock
+        self.start_capture()
 
     def stop_capture(self):
         """
@@ -137,69 +164,70 @@ class CameraManager:
                 self._cap = None
         self._last_frame = None
 
-    def get_last_frame(self) -> Optional[np.ndarray]:
+    def get_last_frame(self, fallback_mock: bool = True) -> Optional[np.ndarray]:
         """
-        Returns the latest captured frame from buffer if available, else None.
+        Returns the most recently captured real frame if available.
+        If the physical camera is not initialized or still starting, returns synthetic fallback if requested.
         """
         with self._lock:
             if self.privacy_shutter_closed:
                 return None
             if self._last_frame is not None:
+                # Return real frame
                 return self._last_frame.copy()
+
+        # If no frame exists and not capturing, trigger start
+        if not self.is_capturing and not self.privacy_shutter_closed:
+            self.start_capture()
+
+        with self._lock:
+            if self._last_frame is not None:
+                return self._last_frame.copy()
+
+        if fallback_mock:
+            return self.generate_mock_face_frame("happy")
         return None
 
     def read_frame(self) -> Tuple[bool, Optional[np.ndarray]]:
         """
-        Reads the most recent frame from the camera buffer or directly from capture.
+        Reads the most recent frame from the camera buffer.
+        Guarantees thread-safety: never calls cap.read() concurrently with the worker thread.
         Returns (success: bool, frame: Optional[np.ndarray]).
         """
         with self._lock:
             if self.privacy_shutter_closed:
                 return False, None
 
-            # If we already have a fresh frame (< 1.5s old), return it immediately
-            if self._last_frame is not None and (time.time() - self._last_frame_time < 1.5):
+            # If we already have a fresh frame (< 2.0s old), return it immediately
+            if self._last_frame is not None and (time.time() - self._last_frame_time < 2.0):
                 return True, self._last_frame.copy()
 
-        # If not started, attempt start
-        if self._cap is None or not self._cap.isOpened():
-            if not self.start_capture():
-                return True, self.generate_mock_face_frame("happy")
+        # If not capturing, attempt start
+        if not self.is_capturing and not self.privacy_shutter_closed:
+            self.start_capture()
 
-        with self._lock:
-            if self._last_frame is not None:
-                return True, self._last_frame.copy()
-
-            if self._cap is not None and self._cap.isOpened():
-                try:
-                    ret, frame = self._cap.read()
-                    if ret and frame is not None:
-                        self._last_frame = frame
-                        self._last_frame_time = time.time()
-                        return True, frame.copy()
-                except Exception as e:
-                    logger.error(f"Error reading camera frame: {e}")
+        # Wait briefly up to 150ms for the worker to pull the first frame
+        for _ in range(15):
+            with self._lock:
+                if self._last_frame is not None:
+                    return True, self._last_frame.copy()
+            time.sleep(0.01)
 
         return True, self.generate_mock_face_frame("happy")
-
-    def get_last_frame(self) -> Optional[np.ndarray]:
-        """Returns the most recently captured frame without blocking."""
-        with self._lock:
-            if self._last_frame is not None:
-                return self._last_frame.copy()
-        return self.generate_mock_face_frame("happy")
 
     def get_status(self) -> Dict[str, Any]:
         with self._lock:
             opened = self._cap.isOpened() if self._cap is not None else False
-            has_recent_frame = (time.time() - self._last_frame_time < 2.0) if self._last_frame_time > 0 else False
+            has_recent_frame = (time.time() - self._last_frame_time < 2.5) if self._last_frame_time > 0 else False
+            age = round(time.time() - self._last_frame_time, 2) if self._last_frame_time > 0 else None
             return {
                 "privacy_shutter_closed": self.privacy_shutter_closed,
                 "is_capturing": self.is_capturing,
                 "camera_index": self.camera_index,
                 "camera_opened": opened or has_recent_frame,
                 "has_frames": self._last_frame is not None,
-                "last_frame_age_seconds": round(time.time() - self._last_frame_time, 2) if self._last_frame_time > 0 else None,
+                "is_physical_feed": bool(opened and has_recent_frame),
+                "last_frame_age_seconds": age,
             }
 
     @classmethod

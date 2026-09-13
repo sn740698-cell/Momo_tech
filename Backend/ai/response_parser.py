@@ -119,6 +119,10 @@ class ResponseParser:
         if len(cleaned) >= 2 and ((cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'"))):
             cleaned = cleaned[1:-1].strip()
 
+        # Strip echoed prompt instructions or system directives
+        cleaned = re.sub(r'CRITICAL ANTI-HALLUCINATION REQUIREMENT:.*$', '', cleaned, flags=re.DOTALL | re.IGNORECASE).strip()
+        cleaned = re.sub(r'\[(?:VERIFIED GROUNDED FACTS|VERIFIED SOURCE PASSAGES|GROUNDED KNOWLEDGE)[^\]]*\].*$', '', cleaned, flags=re.DOTALL | re.IGNORECASE).strip()
+
         # Sanitize cutoff disclaimers
         cleaned = cls.sanitize_cutoff_disclaimers(cleaned)
         return cleaned

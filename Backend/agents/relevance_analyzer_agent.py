@@ -157,7 +157,7 @@ class RelevanceAnalyzerAgent:
             key_facts.append(f"• ({src}) {first_sent}")
 
         # Assemble high-clarity supervisor directive for ConversationAgent / LLM
-        facts_summary = "\n".join(key_facts[:4])
+        facts_summary = "\n".join(key_facts[:5])
         passages_summary = "\n\n".join(f"[{c.metadata.get('source', 'Web')}]: {c.content}" for c in filtered_chunks[:3])
         directive = (
             f"[RELEVANCE-FILTERED WEB RESEARCH ({len(filtered_chunks)} verified passages)]:\n"
@@ -169,9 +169,15 @@ class RelevanceAnalyzerAgent:
             "Never reply with generic cheerleading, filler comments, or game suggestions."
         )
 
+        metadata = dict(state.metadata or {})
+        metadata["key_facts"] = key_facts
+        metadata["facts_summary"] = facts_summary
+        metadata["source_urls"] = [c.metadata.get("url") for c in filtered_chunks if c.metadata.get("url")]
+
         logger.info(f"RelevanceAnalyzerAgent selected {len(filtered_chunks)} relevant facts.")
         return {
             "retrieved_context": filtered_chunks,
             "conversation_context": directive,
+            "metadata": metadata,
             "current_agent": "relevance_analyzer_agent"
         }

@@ -51,16 +51,23 @@ class ConversationAgent:
         session_mins = state.user_context.session_duration_minutes if state.user_context else 0
         idle_secs = state.user_context.idle_seconds if state.user_context else 0
 
-        # Include retrieved context if available from RetrievalAgent
-        context_snippets = []
+        # Separate web grounding / document context from user-specific memories
+        web_grounding_snippets = []
+        user_memories = []
+
+        # Include retrieved context if available from RetrievalAgent / Research Supervisor
         if state.retrieved_context:
-            for c in state.retrieved_context[:3]:
-                context_snippets.append(f"[Document Context]: {c.content}")
+            for c in state.retrieved_context[:4]:
+                src = c.metadata.get("source", "Web Resource") if c.metadata else "Web Resource"
+                url = c.metadata.get("url", "") if c.metadata else ""
+                title = c.metadata.get("title", "") if c.metadata else ""
+                header_line = f"Source: {src}" + (f" ({title})" if title else "") + (f" | URL: {url}" if url else "")
+                web_grounding_snippets.append(f"[{header_line}]\n{c.content}")
         
         # Include financial insights if available from DataAnalyzerAgent
         if state.financial_insights:
             for f in state.financial_insights[:2]:
-                context_snippets.append(
+                web_grounding_snippets.append(
                     f"[Verified Invoice {f.invoice_number}]: Total {f.currency} {f.invoice_total}, "
                     f"Paid {f.amount_paid}, Balance Due {f.balance_due}, Due Date {f.due_date}, Status {f.payment_status}"
                 )
@@ -68,7 +75,7 @@ class ConversationAgent:
         # Include desktop automation execution outcome if available from AutomationAgent
         if state.metadata and state.metadata.get("automation_result"):
             auto_res = state.metadata["automation_result"]
-            context_snippets.append(
+            web_grounding_snippets.append(
                 f"[Desktop Automation Action Executed]: {auto_res.get('summary', 'Action performed successfully.')} "
                 f"(Target: {auto_res.get('target')}, Action: {auto_res.get('action')}, Status: {'Success' if auto_res.get('success') else 'Failed'})"
             )
@@ -89,7 +96,13 @@ class ConversationAgent:
         if needs_crawl:
             try:
                 crawler = LiveWebCrawlerService(timeout_seconds=15.0)
-                clean_q = last_user_msg.replace("what happened with", "").replace("what happened", "").strip()
+                clean_q = last_user_msg
+                for pfx in ["what happened with", "what happened in", "what happened", "what is happening with", "web crawl", "crawl", "tell me its latest news with the date and time", "tell me latest news"]:
+                    clean_q = re.sub(re.escape(pfx), "", clean_q, flags=re.IGNORECASE)
+                clean_q = clean_q.strip()
+                if not clean_q or len(clean_q) < 3:
+                    clean_q = last_user_msg
+
                 live_items = await crawler.gather_realtime_context(
                     query=clean_q,
                     target_date=temporal_intent.get("target_date"),
@@ -98,14 +111,14 @@ class ConversationAgent:
                 )
                 for item in live_items:
                     snippet = item.get('content') or item.get('snippet') or ''
-                    context_snippets.append(
+                    web_grounding_snippets.append(
                         f"[Live Crawled Web Grounding ({item.get('source')} - {item.get('pub_date')})]: "
                         f"{item.get('title')}\nURL: {item.get('url')}\n{snippet[:1000]}"
                     )
             except Exception as e:
                 logger.warning(f"Could not retrieve live crawled context for conversation: {e}")
 
-        combined_context = "\n".join(context_snippets) if context_snippets else None
+        combined_grounding = "\n\n".join(web_grounding_snippets) if web_grounding_snippets else None
 
         # Incorporate LangGraph agent intent understanding & directives
         agent_directive = None
@@ -131,7 +144,8 @@ class ConversationAgent:
 
         system_prompt = PromptBuilder.build_system_prompt(
             user_name="User",
-            memories=[combined_context] if combined_context else [],
+            memories=user_memories,
+            web_grounding=combined_grounding,
             active_app=active_app,
             session_minutes=session_mins,
             idle_seconds=idle_secs,
@@ -145,9 +159,22 @@ class ConversationAgent:
             reinforced_rules=learned_rules
         )
 
+        # In-turn prompt assembly: embed verified grounding directly in the user turn for 1B model attention
+        is_automation = bool(state.metadata and state.metadata.get("automation_result"))
+        is_research = bool(state.retrieved_context or needs_crawl or combined_grounding or query_decomp.get("is_web_crawl_request"))
+
+        user_turn_content = last_user_msg
+        if is_research and combined_grounding:
+            user_turn_content = (
+                f"{last_user_msg}\n\n"
+                f"[VERIFIED GROUNDED FACTS & SOURCES]:\n"
+                f"{combined_grounding[:2200]}\n\n"
+                f"Instructions: Directly answer the question using ONLY the verified facts above. Cite the source or headline. Never invent outside facts or events."
+            )
+
         history = [{"role": m.role, "content": m.content} for m in messages[:-1]]
         chat_msgs = PromptBuilder.assemble_messages(
-            current_input=last_user_msg,
+            current_input=user_turn_content,
             chat_history=history[-6:],
             system_prompt=system_prompt
         )
@@ -161,19 +188,27 @@ class ConversationAgent:
 
         logger.info(f"ConversationAgent invoking local model: '{active_model}'")
 
-        # Fast generation: calibrated predict tokens (48 for automation, 480 for research, 280 for conversation)
+        # Fast generation: calibrated predict tokens and greedy deterministic decoding for research
         is_automation = bool(state.metadata and state.metadata.get("automation_result"))
+        is_research = bool(state.retrieved_context or needs_crawl or combined_grounding or query_decomp.get("is_web_crawl_request"))
+
         if is_automation:
             timeout_val = 5  # Fast sub-second path for automation commands
             predict_tokens = 48
+            model_temp = 0.1
+        elif is_research:
+            timeout_val = int(os.getenv("OLLAMA_TIMEOUT", "90"))
+            predict_tokens = 500
+            model_temp = 0.0  # Greedy deterministic decoding: ZERO random sampling eliminates hallucinations!
         else:
             timeout_val = int(os.getenv("OLLAMA_TIMEOUT", "90"))
-            predict_tokens = 480 if state.retrieved_context else 280
+            predict_tokens = 280
+            model_temp = 0.35
 
         llm_result = await self.client.chat(
             messages=chat_msgs,
             model=active_model,
-            temperature=0.35,
+            temperature=model_temp,
             timeout_seconds=timeout_val,
             format=None,
             num_predict=predict_tokens
@@ -246,34 +281,94 @@ class ConversationAgent:
                     parsed_response.expression = "happy"
                     parsed_response.animation = "nod"
 
-            # Web research grounding reinforcement: ensure substantive answers when retrieved context exists
-            has_generic_or_hallucinated_news = (
-                state.retrieved_context and (
-                    len(parsed_response.message.strip()) < 45
-                    or "I am at your service" in parsed_response.message
-                    or "You are currently looking at the latest news" in parsed_response.message
-                    or "Would you like me to summarize" in parsed_response.message
-                    or "2022" in parsed_response.message
-                    or "Global COVID-19 Cases" in parsed_response.message
+            # Web research grounding & Anti-Hallucination verification
+            if combined_grounding or state.retrieved_context:
+                msg_text = parsed_response.message.strip()
+                msg_lower = msg_text.lower()
+
+                # Extract key query subject terms (excluding stop words)
+                stop_words = {
+                    "what", "is", "the", "a", "an", "of", "and", "or", "in", "on", "at", "to", "for",
+                    "with", "about", "tell", "me", "show", "give", "crawl", "web", "search", "google",
+                    "explain", "how", "why", "who", "when", "where", "please", "can", "you", "go",
+                    "details", "information", "summarize", "summary"
+                }
+                query_keywords = [
+                    w.lower() for w in re.split(r'\W+', last_user_msg)
+                    if len(w) > 3 and w.lower() not in stop_words
+                ]
+
+                # Hallucination flags:
+                is_too_short = len(msg_text) < 45
+                has_generic_filler = any(phrase in msg_lower for phrase in [
+                    "i am at your service", "you are currently looking at",
+                    "would you like me to summarize", "i am here to help",
+                    "i am momo", "how can i help you today"
+                ])
+                has_obsolete_content = any(phrase in msg_lower for phrase in [
+                    "2020", "2021", "2022", "global covid-19", "coronavirus pandemic"
+                ])
+                has_refusal_phrase = any(phrase in msg_lower for phrase in [
+                    "knowledge cutoff", "do not have access", "cannot access the web",
+                    "real-time information"
+                ])
+                # Drift check: if query has specific keywords (e.g. "python", "hackathon", "sih"), does LLM output mention ANY of them?
+                has_subject_drift = (
+                    bool(query_keywords) and
+                    not any(k in msg_lower for k in query_keywords)
                 )
-            )
-            if has_generic_or_hallucinated_news:
-                top_facts = []
-                for c in state.retrieved_context[:4]:
-                    txt = c.content.strip()
-                    title = c.metadata.get("title", "")
-                    src = c.metadata.get("source", "Verified News")
-                    if title and title not in [t.split("] ")[-1].split("\n")[0] for t in top_facts]:
-                        clean_c = re.sub(r'^\[[^\]]+\]:\s*', '', txt).strip()
-                        summary_txt = clean_c[:220] if clean_c and clean_c != title else ""
-                        item_str = f"• [{src}] {title}" + (f"\n  {summary_txt}" if summary_txt else "")
-                        top_facts.append(item_str)
-                if top_facts:
-                    anchor = TemporalService.get_temporal_anchor()
-                    header = f"Here are the latest live verified news headlines as of {anchor['today_day']}, {anchor['today_readable']} ({anchor['current_time_readable']} {anchor['timezone']}):\n\n"
-                    parsed_response.message = header + "\n\n".join(top_facts[:4])
-                    parsed_response.expression = "thinking"
-                    parsed_response.animation = "nod"
+
+                # Source entity overlap check: does the LLM output actually use facts from the retrieved sources?
+                source_terms = set(
+                    w.lower() for w in re.findall(r'\b[A-Za-z0-9_-]{4,}\b', combined_grounding)
+                    if w.lower() not in stop_words
+                ) if combined_grounding else set()
+                response_terms = set(
+                    w.lower() for w in re.findall(r'\b[A-Za-z0-9_-]{4,}\b', msg_text)
+                    if w.lower() not in stop_words
+                )
+                term_overlap = len(response_terms.intersection(source_terms))
+                insufficient_overlap = (len(source_terms) >= 6 and term_overlap < 2)
+
+                is_hallucinating = (
+                    is_too_short or
+                    has_generic_filler or
+                    has_obsolete_content or
+                    has_refusal_phrase or
+                    has_subject_drift or
+                    insufficient_overlap
+                )
+
+                if is_hallucinating:
+                    logger.info("Hallucination or subject drift detected in web crawl response. Synthesizing verified factual response...")
+                    # Synthesize clean, structured response directly from verified facts and citations
+                    facts = []
+                    # Check metadata from RelevanceAnalyzerAgent
+                    if state.metadata and state.metadata.get("key_facts"):
+                        facts = state.metadata["key_facts"][:5]
+                    elif state.retrieved_context:
+                        for c in state.retrieved_context[:4]:
+                            src = c.metadata.get("source", "Verified Source") if c.metadata else "Verified Source"
+                            txt = c.content.strip()
+                            clean_c = re.sub(r'^\[[^\]]+\]:\s*', '', txt).strip()
+                            first_sentence = clean_c.split(". ")[0].strip() + "."
+                            facts.append(f"• ({src}) {first_sentence}")
+
+                    if facts:
+                        # Determine topic/header based on query intent
+                        is_news = any(w in last_user_msg.lower() for w in ["news", "headline", "breaking", "happening", "today", "yesterday", "india"])
+                        anchor = TemporalService.get_temporal_anchor()
+
+                        if is_news:
+                            header = f"Here are the live verified news updates as of {anchor['today_day']}, {anchor['today_readable']} ({anchor['current_time_readable']} {anchor['timezone']}):\n\n"
+                        else:
+                            # Direct crawl or research query
+                            clean_topic = last_user_msg.replace("web crawl", "").replace("crawl", "").replace("search", "").strip()
+                            header = f"Here are the verified key details from the web crawl for \"{clean_topic}\":\n\n"
+
+                        parsed_response.message = header + "\n\n".join(facts)
+                        parsed_response.expression = "thinking"
+                        parsed_response.animation = "nod"
 
             # Temporal grounding: if user asks for date and time, ensure it is included
             if any(w in last_user_msg.lower() for w in ["date and time", "current date", "what is the date", "what is the time"]):

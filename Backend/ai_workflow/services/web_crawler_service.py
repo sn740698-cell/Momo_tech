@@ -145,20 +145,83 @@ class LiveWebCrawlerService:
         fixing common misspellings, and removing trailing search noise words.
         """
         clean = query.strip()
-        # Strip conversational conversational wrappers (e.g. 'tell me its', 'show me', 'what is', 'can you find')
-        clean = re.sub(r'^(?:ok\s+|please\s+)?(?:go\s+)?(?:web\s+crawl\s+(?:about|on|for)?|crawl\s+(?:about|on|for)?|search\s+(?:web\s+)?(?:for|about)?|look\s+up|tell\s+(?:me\s+)?(?:its\s+|about\s+|the\s+)?|what\s+is\s+|show\s+(?:me\s+)?|give\s+(?:me\s+)?|find\s+(?:me\s+)?)\s*', '', clean, flags=re.IGNORECASE).strip()
+        # Strip conversational conversational wrappers (e.g. 'tell me about', 'who is', 'what is', 'can you find')
+        clean = re.sub(
+            r'^(?:ok\s+|please\s+)?(?:go\s+)?(?:web\s+crawl\s+(?:about|on|for)?|crawl\s+(?:about|on|for)?|search\s+(?:web\s+)?(?:for|about)?|look\s+up|tell\s+(?:me\s+)?(?:its\s+|about\s+|the\s+|more\s+about\s+)?|who\s+(?:is|was|were)\s+(?:the\s+)?|what\s+(?:is|was|are)\s+(?:the\s+)?|where\s+(?:is|was)\s+(?:the\s+)?|biography\s+of\s+|history\s+of\s+|facts\s+about\s+|explain\s+(?:about\s+)?|show\s+(?:me\s+)?|give\s+(?:me\s+)?|find\s+(?:me\s+)?)\s*',
+            '', clean, flags=re.IGNORECASE
+        ).strip()
         # Strip trailing date/time clauses that confuse web search engines
         clean = re.sub(r'\s*(?:with\s+(?:the\s+)?date\s+and\s+time|with\s+date\s+and\s+time|with\s+time\s+and\s+date|date\s+and\s+time)\s*$', '', clean, flags=re.IGNORECASE).strip()
         clean = re.sub(r'\bsih\b', 'Smart India Hackathon', clean, flags=re.IGNORECASE)
         clean = re.sub(r'\bhackothon\b', 'Hackathon', clean, flags=re.IGNORECASE)
         # Strip trailing intent noise words that disrupt web search relevance
         clean = re.sub(r'\b(?:details|overview|info|information|updates|give me)\b', '', clean, flags=re.IGNORECASE).strip()
+        # Strip leading/trailing quotes and question marks
+        clean = re.sub(r'[\?\"\']+$', '', clean).strip()
+        clean = re.sub(r'^[\"\']+', '', clean).strip()
         clean = re.sub(r'\s+', ' ', clean).strip()
         return clean or query.strip()
+
+    @staticmethod
+    def sanitize_tables_and_infoboxes(raw_text: str) -> str:
+        """
+        Sanitizes Wikipedia infobox pipes, markdown tables, and raw delimiters
+        into clean, fluent natural sentences ('Key: Value.').
+        Eliminates syntax clutter that can confuse LLMs into hallucinations.
+        """
+        if not raw_text:
+            return ""
+        lines = raw_text.splitlines()
+        cleaned_lines = []
+        for line in lines:
+            line_s = line.strip()
+            if not line_s:
+                cleaned_lines.append("")
+                continue
+            line_s = re.sub(r'\[edit\]', '', line_s, flags=re.IGNORECASE).strip()
+            line_s = re.sub(r'\[citation\s+needed\]', '', line_s, flags=re.IGNORECASE).strip()
+            # Skip markdown table borders like |---|---| or |:---:|
+            if re.match(r'^[\|\s\-:]+$', line_s):
+                continue
+            # Parse markdown table key-value rows
+            if line_s.startswith("|") and line_s.endswith("|"):
+                parts = [p.strip() for p in line_s.split("|") if p.strip()]
+                if len(parts) == 2:
+                    key, val = parts[0], parts[1]
+                    if key and val and len(key) < 60:
+                        cleaned_lines.append(f"{key}: {val}.")
+                        continue
+                elif len(parts) == 1:
+                    cleaned_lines.append(parts[0])
+                    continue
+            cleaned_lines.append(line_s)
+
+        res = "\n".join(cleaned_lines)
+        res = res.replace("\ufffd", "-").replace("\u2013", "-").replace("\u2014", "-")
+        res = re.sub(r'\n{3,}', '\n\n', res)
+        return res
 
     # =========================================================================
     # UNIVERSAL WEB SEARCH ENGINES (BING LIVE SEARCH + DUCKDUCKGO HTML & LITE)
     # =========================================================================
+
+    @staticmethod
+    def decode_duckduckgo_url(href: str) -> str:
+        """Decodes destination URL from DuckDuckGo redirect wrapper if present."""
+        if not href:
+            return ""
+        if "uddg=" in href:
+            try:
+                parsed = urllib.parse.urlparse(href)
+                qs = urllib.parse.parse_qs(parsed.query)
+                uddg_vals = qs.get("uddg", [])
+                if uddg_vals:
+                    return urllib.parse.unquote(uddg_vals[0])
+            except Exception:
+                pass
+        if href.startswith("//"):
+            return f"https:{href}"
+        return href
 
     @staticmethod
     def decode_bing_url(href: str) -> str:
@@ -227,6 +290,51 @@ class LiveWebCrawlerService:
                             break
         except Exception as e:
             logger.debug(f"Bing search error for '{query}': {e}")
+
+        return results
+
+    async def fetch_duckduckgo_search(self, query: str, max_results: int = 4) -> List[Dict[str, Any]]:
+        """
+        Universal live web search using DuckDuckGo HTML endpoint.
+        Fast, rate-limit resilient, and provides accurate snippets and direct links.
+        """
+        results: List[Dict[str, Any]] = []
+        if not query or not query.strip():
+            return results
+
+        clean_q = self.expand_query(query)
+
+        try:
+            async with httpx.AsyncClient(headers=self.headers, timeout=self.timeout, verify=False) as client:
+                resp = await client.post("https://html.duckduckgo.com/html/", data={"q": clean_q})
+                if resp.status_code == 200 and resp.text:
+                    soup = bs4.BeautifulSoup(resp.text, "html.parser")
+                    bodies = soup.select(".result__body")
+                    for b in bodies:
+                        t_el = b.select_one(".result__title a")
+                        s_el = b.select_one(".result__snippet")
+                        if not t_el:
+                            continue
+                        raw_href = t_el.get("href", "")
+                        real_url = self.decode_duckduckgo_url(raw_href)
+                        if not real_url.startswith("http") or "duckduckgo.com" in real_url:
+                            continue
+
+                        title = t_el.get_text(strip=True)
+                        snippet = self.clean_html(s_el.get_text(strip=True)) if s_el else title
+
+                        results.append({
+                            "title": title,
+                            "url": real_url,
+                            "source": "Web Search (DuckDuckGo Live)",
+                            "pub_date": "Live Web",
+                            "snippet": snippet or title,
+                            "content": snippet or title,
+                        })
+                        if len(results) >= max_results:
+                            break
+        except Exception as e:
+            logger.debug(f"DuckDuckGo search error for '{query}': {e}")
 
         return results
 
@@ -320,9 +428,17 @@ class LiveWebCrawlerService:
         """
         Retrieves breaking national news directly from top Indian news outlets
         (The Hindu, Indian Express, NDTV, Times of India).
+        Only filters on genuine specific topic keywords, ignoring generic location or news terms.
         """
         results: List[Dict[str, Any]] = []
-        kw_lower = [k.lower() for k in keywords] if keywords else []
+        generic_noise = {
+            "india", "national", "news", "today", "yesterday", "latest", "update",
+            "updates", "breaking", "event", "events", "what", "tell", "give", "show", "current"
+        }
+        topic_keywords = [
+            k.lower() for k in (keywords or [])
+            if k.lower() not in generic_noise and len(k) > 3
+        ]
 
         async with httpx.AsyncClient(headers=self.headers, timeout=self.timeout) as client:
             tasks = [client.get(feed_url, follow_redirects=True) for _, feed_url in self.DIRECT_NEWS_FEEDS]
@@ -349,7 +465,11 @@ class LiveWebCrawlerService:
                         clean_desc = self.clean_html(desc)
                         searchable = f"{title} {clean_desc}".lower()
 
-                        if kw_lower and not any(k in searchable for k in kw_lower):
+                        if topic_keywords:
+                            if not any(k in searchable for k in topic_keywords):
+                                continue
+                        elif keywords:
+                            # If all keywords were generic noise terms (e.g. ['india']), do not match arbitrary news
                             continue
 
                         results.append({
@@ -411,7 +531,8 @@ class LiveWebCrawlerService:
                             favor_recall=True
                         )
                         if extracted and len(extracted.strip()) > 140:
-                            clean_txt = self.clean_html(extracted.strip())
+                            clean_txt = self.sanitize_tables_and_infoboxes(extracted.strip())
+                            clean_txt = self.clean_html(clean_txt)
                             if self.is_valid_article_body("", clean_txt):
                                 return clean_txt[:3500]
                     except Exception as e:
@@ -424,6 +545,7 @@ class LiveWebCrawlerService:
                         doc = Document(html_content)
                         summary_html = doc.summary()
                         clean_summary = self.clean_html(summary_html)
+                        clean_summary = self.sanitize_tables_and_infoboxes(clean_summary)
                         if len(clean_summary) > 140 and self.is_valid_article_body("", clean_summary):
                             return clean_summary[:3000]
                     except Exception as e:
@@ -438,7 +560,8 @@ class LiveWebCrawlerService:
                         paragraphs = [p.get_text(strip=True) for p in target.find_all("p")]
                         substantive = [p for p in paragraphs if len(p) > 35 and not any(pw in p.lower() for pw in self.PAYWALL_PATTERNS)]
                         if substantive:
-                            return "\n\n".join(substantive[:6])[:2500]
+                            joined = "\n\n".join(substantive[:6])
+                            return self.sanitize_tables_and_infoboxes(joined)[:2500]
                 except Exception as e:
                     logger.debug(f"BS4 paragraph extraction failed for {url}: {e}")
 
@@ -453,6 +576,7 @@ class LiveWebCrawlerService:
                     res = await asyncio.wait_for(crawler.arun(url=url), timeout=self.timeout)
                     if res and res.markdown:
                         clean = self.clean_html(res.markdown)
+                        clean = self.sanitize_tables_and_infoboxes(clean)
                         if self.is_valid_article_body("", clean):
                             return clean[:3000]
             except Exception as e:
@@ -554,11 +678,11 @@ class LiveWebCrawlerService:
                 items.extend(wiki_items)
 
         # 1.5. Direct National News Feeds for live news & current events (The Hindu, NDTV, Times of India, Indian Express)
-        is_news_intent = any(w in q_lower for w in ["news", "headline", "breaking", "happening", "yesterday", "today's events", "current events", "the hindu", "ndtv"])
+        is_news_intent = any(w in q_lower for w in ["news", "headline", "headlines", "breaking news", "current events", "the hindu", "ndtv"]) and not any(w in q_lower for w in ["who is", "who was", "biography", "history", "tell me about", "what is"])
         if is_news_intent:
             raw_keywords = [
                 w for w in re.sub(r"[^\w\s]", "", expanded_q).split()
-                if len(w) > 3 and w.lower() not in ["what", "happened", "with", "yesterday", "today", "show", "tell", "news", "give", "please"]
+                if len(w) > 3 and w.lower() not in ["what", "happened", "with", "yesterday", "today", "show", "tell", "news", "give", "please", "india"]
             ]
             direct_news = await self.fetch_direct_national_news(keywords=raw_keywords, max_results=max_results)
             if direct_news:
@@ -570,8 +694,15 @@ class LiveWebCrawlerService:
             if bing_results:
                 items.extend(bing_results)
 
-        # 3. Wikipedia Topic Search Fallback
-        if not items or len(items) < 2:
+        # 2.5. Secondary Web Search via DuckDuckGo Live Search Engine (Resilient fallback)
+        if len(items) < max_results:
+            ddg_results = await self.fetch_duckduckgo_search(query=expanded_q, max_results=max_results + 1)
+            if ddg_results:
+                items.extend(ddg_results)
+
+        # 3. Wikipedia Topic Search Fallback / Encyclopedic Knowledge
+        is_encyclopedic = any(w in q_lower for w in ["who is", "who was", "biography", "history", "tell me about", "what is"])
+        if not items or len(items) < 2 or is_encyclopedic:
             wiki_search = await self.fetch_wikipedia_search(query=expanded_q, max_results=max_results)
             if wiki_search:
                 items.extend(wiki_search)

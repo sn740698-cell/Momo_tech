@@ -56,6 +56,11 @@ class ConversationAgent:
         user_memories = []
 
         # Include retrieved context if available from RetrievalAgent / Research Supervisor
+        if state.metadata and state.metadata.get("facts_summary"):
+            web_grounding_snippets.append(
+                f"[VERIFIED KEY FACTS]:\n{state.metadata['facts_summary']}"
+            )
+
         if state.retrieved_context:
             for c in state.retrieved_context[:4]:
                 src = c.metadata.get("source", "Web Resource") if c.metadata else "Web Resource"
@@ -238,10 +243,13 @@ class ConversationAgent:
             user_turn_content = (
                 f"{last_user_msg}\n\n"
                 f"[VERIFIED GROUNDED FACTS & SOURCES]:\n"
-                f"{combined_grounding[:2200]}\n\n"
-                f"Instructions: Directly answer the question using ONLY the verified facts above. Organize key points into clear bullet points (• ). Never invent outside facts or events."
+                f"{combined_grounding[:2400]}\n\n"
+                f"Instructions: Directly answer the question using ONLY the verified facts above. "
+                f"Present the key information organized in clean, authentic bullet points (• ). "
+                f"Never guess, extrapolate, or invent outside titles, dates, movies, or details. "
+                f"If a specific detail is not mentioned in the context above, state only what is verified."
             )
-            predict_tokens = 320
+            predict_tokens = 350
             model_temp = 0.0  # Greedy deterministic decoding
         else:
             predict_tokens = 200

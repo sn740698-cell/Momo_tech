@@ -178,6 +178,7 @@ class OllamaClient:
                 "num_thread": min(8, os.cpu_count() or 4),
                 "top_k": 40,
                 "top_p": 0.9,
+                "repeat_penalty": 1.15,
             }
         }
         if format:

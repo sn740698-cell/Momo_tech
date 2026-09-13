@@ -6,17 +6,61 @@ Scores candidate paragraphs and sentences for direct relevance to the user's spe
 extracting key facts, figures, and direct answers for the local LLM to articulate.
 """
 import re
+import math
 import logging
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 
 from graph.state import MomoState, RetrievedChunk
+from ai_workflow.services.web_crawler_service import LiveWebCrawlerService
 
 logger = logging.getLogger(__name__)
 
 
+class BM25PassageRanker:
+    """
+    Mathematical BM25 passage ranking engine.
+    Calculates TF-IDF BM25 relevance scores for document passages against user queries.
+    Uses safe Lucene IDF floor to guarantee positive, balanced IDF across passage sets.
+    """
+    def __init__(self, tokenized_passages: List[List[str]], k1: float = 1.5, b: float = 0.75):
+        self.k1 = k1
+        self.b = b
+        self.corpus = tokenized_passages
+        self.corpus_size = len(tokenized_passages)
+        self.avg_doc_len = sum(len(d) for d in tokenized_passages) / max(1, self.corpus_size)
+        self.doc_freqs: Dict[str, int] = {}
+        for doc in tokenized_passages:
+            for w in set(doc):
+                self.doc_freqs[w] = self.doc_freqs.get(w, 0) + 1
+
+        # Lucene BM25 IDF: ln(1 + (N - n + 0.5) / (n + 0.5))
+        self.idf: Dict[str, float] = {}
+        for w, freq in self.doc_freqs.items():
+            self.idf[w] = math.log(1.0 + (self.corpus_size - freq + 0.5) / (freq + 0.5))
+
+    def get_scores(self, query_tokens: List[str]) -> List[float]:
+        scores = [0.0] * self.corpus_size
+        for i, doc in enumerate(self.corpus):
+            doc_len = len(doc)
+            doc_counts: Dict[str, int] = {}
+            for w in doc:
+                doc_counts[w] = doc_counts.get(w, 0) + 1
+
+            score = 0.0
+            for q in query_tokens:
+                if q in doc_counts:
+                    freq = doc_counts[q]
+                    idf_val = self.idf.get(q, 0.5)
+                    tf = (freq * (self.k1 + 1.0)) / (freq + self.k1 * (1.0 - self.b + self.b * (doc_len / max(1.0, self.avg_doc_len))))
+                    score += idf_val * tf
+            scores[i] = score
+        return scores
+
+
 class RelevanceAnalyzerAgent:
     """
-    Analyzes raw crawled web content and extracts strictly relevant facts.
+    Analyzes raw crawled web content, applies BM25 passage ranking,
+    and extracts strictly relevant, verified facts to eliminate LLM hallucinations.
     """
 
     NOISE_PATTERNS = [
@@ -36,57 +80,74 @@ class RelevanceAnalyzerAgent:
         pass
 
     @classmethod
-    def clean_and_split_paragraphs(cls, text: str) -> List[str]:
-        raw_paras = [p.strip() for p in text.replace("\r\n", "\n").split("\n\n")]
-        cleaned = []
+    def extract_first_sentence(cls, text: str) -> str:
+        """Extracts the first complete sentence while preserving initials and honorifics."""
+        if not text:
+            return ""
+        protected = re.sub(r'\b([A-Z])\.\s*', r'\1<DOT_INITIAL> ', text)
+        protected = re.sub(r'\b(Dr|Mr|Mrs|Ms|Prof|Sr|Jr|vs|eg|ie)\.\s*', r'\1<DOT_ABBR> ', protected, flags=re.IGNORECASE)
+        parts = re.split(r'[.!?]\s+', protected)
+        if parts:
+            first = parts[0].replace('<DOT_INITIAL>', '.').replace('<DOT_ABBR>', '.').strip()
+            if not first.endswith('.'):
+                first += '.'
+            return first
+        return text.strip()
+
+    @classmethod
+    def clean_and_split_passages(cls, text: str) -> List[str]:
+        """
+        Cleans, infobox-sanitizes, and splits text into cohesive 2-4 sentence passages.
+        """
+        sanitized = LiveWebCrawlerService.sanitize_tables_and_infoboxes(text)
+        raw_paras = [p.strip() for p in sanitized.replace("\r\n", "\n").split("\n\n")]
+        passages: List[str] = []
+
         for p in raw_paras:
-            p_clean = " ".join(p.split())
-            # Skip very short fragments, navigation lines, or noise
-            if len(p_clean) < 30:
+            p_clean = " ".join(p.split()).replace("\u2191", " ").replace("^", " ")
+            p_clean = re.sub(r'\[\d+\]', '', p_clean).strip()
+            if len(p_clean) < 25:
                 continue
             if any(pat.search(p_clean) for pat in cls.NOISE_PATTERNS):
                 continue
-            cleaned.append(p_clean)
-        return cleaned
+
+            # If paragraph is long, split into 2-3 sentence cohesive chunks
+            if len(p_clean) > 400:
+                protected = re.sub(r'\b([A-Z])\.\s*', r'\1<DOT_INITIAL> ', p_clean)
+                protected = re.sub(r'\b(Dr|Mr|Mrs|Ms|Prof|Sr|Jr|vs|eg|ie)\.\s*', r'\1<DOT_ABBR> ', protected, flags=re.IGNORECASE)
+                sentences = [
+                    s.replace('<DOT_INITIAL>', '.').replace('<DOT_ABBR>', '.').strip()
+                    for s in re.split(r'[.!?]\s+', protected) if s.strip()
+                ]
+                cur_chunk: List[str] = []
+                cur_len = 0
+                for s_str in sentences:
+                    cur_chunk.append(s_str)
+                    cur_len += len(s_str)
+                    if cur_len >= 220:
+                        passages.append(" ".join(cur_chunk))
+                        cur_chunk = []
+                        cur_len = 0
+                if cur_chunk:
+                    passages.append(" ".join(cur_chunk))
+            else:
+                passages.append(p_clean)
+
+        return passages
 
     @classmethod
-    def score_relevance(cls, paragraph: str, query: str, query_tokens: List[str]) -> float:
-        """
-        Calculates a relevance score for a paragraph against query tokens.
-        Considers keyword matching, numbers/dates, and density.
-        """
-        p_lower = paragraph.lower()
-        score = 0.0
-
-        # Exact phrase bonus
-        if query.lower() in p_lower:
-            score += 3.0
-
-        # Token matches
-        matched_tokens = 0
-        for tok in query_tokens:
-            if tok in p_lower:
-                matched_tokens += 1
-                score += 1.0
-
-        if query_tokens:
-            ratio = matched_tokens / len(query_tokens)
-            score += ratio * 2.0
-
-        # Numerical or factual detail bonus (dates, percentages, figures)
-        if re.search(r"(?:19|20)\d{2}|\d+(?:%|st|nd|rd|th|km|crore|lakh|million|billion)", paragraph):
-            score += 0.8
-
-        # Penalty for overly generic text
-        if len(paragraph) > 600:
-            score *= 0.95
-
-        return score
+    def tokenize(cls, text: str) -> List[str]:
+        """Normalizes and extracts lowercase word tokens."""
+        return [
+            w.lower().strip(".,()[]{}:;\"'!?")
+            for w in re.sub(r"[^\w\s-]", " ", text).split()
+            if len(w) > 1
+        ]
 
     async def run(self, state: MomoState) -> Dict[str, Any]:
         """
-        Takes MomoState with retrieved_context, ranks and filters passages,
-        and injects high-relevance factual excerpts into state.
+        Takes MomoState with retrieved_context, ranks passages with BM25,
+        filters noise, and injects strictly verified factual excerpts into state.
         """
         last_user_msg = ""
         for m in reversed(state.messages):
@@ -104,41 +165,79 @@ class RelevanceAnalyzerAgent:
 
         logger.info(f"RelevanceAnalyzerAgent evaluating {len(raw_chunks)} chunks for query: '{last_user_msg}'")
 
-        # Extract meaningful query keywords (excluding stop words)
+        # Normalize query and extract meaningful keywords (excluding conversational stop words)
+        clean_q = LiveWebCrawlerService.expand_query(last_user_msg)
         stop_words = {
             "what", "is", "the", "a", "an", "of", "and", "or", "in", "on", "at", "to", "for",
             "with", "about", "tell", "me", "show", "give", "crawl", "web", "search", "google",
-            "explain", "how", "why", "who", "when", "where", "please", "can", "you", "go"
+            "explain", "how", "why", "who", "when", "where", "please", "can", "you", "go", "its"
         }
-        tokens = [
-            w.lower() for w in re.sub(r"[^\w\s]", "", last_user_msg).split()
-            if len(w) > 2 and w.lower() not in stop_words
+        query_tokens = [
+            w for w in self.tokenize(clean_q)
+            if len(w) > 2 and w not in stop_words
         ]
+        if not query_tokens:
+            query_tokens = [w for w in self.tokenize(last_user_msg) if len(w) > 2 and w not in stop_words]
 
-        scored_passages: List[Tuple[float, str, str, str]] = []  # (score, text, source, url)
-
+        # Extract all candidate passages across chunks
+        candidate_pool: List[Tuple[str, str, str]] = []  # (passage_text, source, url)
         for chunk in raw_chunks:
             source = chunk.metadata.get("source", "Web Resource") if chunk.metadata else "Web Resource"
             url = chunk.metadata.get("url", "") if chunk.metadata else ""
-            paragraphs = self.clean_and_split_paragraphs(chunk.content)
+            passages = self.clean_and_split_passages(chunk.content)
+            for p in passages:
+                candidate_pool.append((p, source, url))
 
-            for p in paragraphs:
-                score = self.score_relevance(p, last_user_msg, tokens)
-                if score > 0.5:
-                    scored_passages.append((score, p, source, url))
+        if not candidate_pool:
+            logger.info("RelevanceAnalyzerAgent: No candidate passages extracted.")
+            return {"current_agent": "relevance_analyzer_agent"}
 
-        # Sort descending by relevance score
+        # Tokenize passages for BM25
+        tokenized_corpus = [self.tokenize(p[0]) for p in candidate_pool]
+        bm25_ranker = BM25PassageRanker(tokenized_corpus)
+        bm25_scores = bm25_ranker.get_scores(query_tokens)
+
+        # Combine BM25 with Exact Phrase and Entity / Numerical Detail Bonuses
+        scored_passages: List[Tuple[float, str, str, str]] = []
+        clean_q_lower = clean_q.lower()
+
+        for (p_text, src, url), bm_sc in zip(candidate_pool, bm25_scores):
+            p_lower = p_text.lower()
+            combined_score = bm_sc
+
+            # 1. Exact phrase or entity subject match bonus
+            clean_phrase = re.sub(r'[^\w\s]', '', clean_q_lower).strip()
+            p_clean_text = re.sub(r'[^\w\s]', '', p_lower)
+            if clean_q_lower in p_lower or (len(clean_phrase) > 4 and clean_phrase in p_clean_text):
+                combined_score += 3.0
+
+            # 2. Token overlap ratio
+            matched = sum(1 for q in query_tokens if q in p_lower)
+            if query_tokens:
+                combined_score += (matched / len(query_tokens)) * 2.0
+
+            # 3. Numerical or factual detail bonus (dates, figures, awards)
+            if re.search(r"\b(?:19|20)\d{2}\b|\b\d+(?:%|st|nd|rd|th|km|crore|lakh|million|billion)\b", p_text):
+                combined_score += 0.8
+
+            # Only retain passages with non-zero query alignment
+            if combined_score > 0.3:
+                scored_passages.append((combined_score, p_text, src, url))
+
+        # Sort descending by combined relevance score
         scored_passages.sort(key=lambda x: x[0], reverse=True)
 
-        # Select top substantive passages
+        # Select top substantive passages (up to 5)
         selected = scored_passages[:5]
 
-        if not selected and raw_chunks:
-            # Fallback: take clean paragraphs from the first chunk
-            for chunk in raw_chunks[:2]:
-                paras = self.clean_and_split_paragraphs(chunk.content)
-                for p in paras[:2]:
-                    selected.append((1.0, p, chunk.metadata.get("source", "Web"), chunk.metadata.get("url", "")))
+        if not selected and candidate_pool:
+            # Fallback: select passages containing any query token
+            for p_text, src, url in candidate_pool:
+                p_lower = p_text.lower()
+                if any(q in p_lower for q in query_tokens):
+                    selected.append((1.0, p_text, src, url))
+                    if len(selected) >= 3:
+                        break
 
         # Build refined RetrievedChunk items
         filtered_chunks: List[RetrievedChunk] = []
@@ -146,26 +245,27 @@ class RelevanceAnalyzerAgent:
 
         for idx, (sc, text, src, url) in enumerate(selected, 1):
             filtered_chunks.append(RetrievedChunk(
-                chunk_id=f"relevant-{idx}",
+                chunk_id=f"bm25-{idx}",
                 document_id=f"fact-{idx}",
                 content=text,
                 score=round(min(1.0, sc / 5.0), 3),
-                metadata={"url": url, "source": src, "relevance_score": sc}
+                metadata={"url": url, "source": src, "relevance_score": sc, "algorithm": "BM25+Entity"}
             ))
-            # Extract first sentence or bullet
-            first_sent = text.split(". ")[0].strip() + "."
+            # Extract first sentence safely without splitting on initials
+            first_sent = self.extract_first_sentence(text)
             key_facts.append(f"• ({src}) {first_sent}")
 
-        # Assemble high-clarity supervisor directive for ConversationAgent / LLM
         facts_summary = "\n".join(key_facts[:5])
-        passages_summary = "\n\n".join(f"[{c.metadata.get('source', 'Web')}]: {c.content}" for c in filtered_chunks[:3])
+        passages_summary = "\n\n".join(f"[{c.metadata.get('source', 'Web')}]: {c.content}" for c in filtered_chunks[:4])
+
         directive = (
-            f"[RELEVANCE-FILTERED WEB RESEARCH ({len(filtered_chunks)} verified passages)]:\n"
-            f"User Target Query: \"{last_user_msg}\"\n\n"
+            f"[BM25-FILTERED VERIFIED RESEARCH ({len(filtered_chunks)} authoritative passages)]:\n"
+            f"User Target Subject: \"{clean_q}\"\n\n"
             f"KEY EXTRACTED FACTS:\n{facts_summary}\n\n"
-            f"DETAILED PASSAGES:\n{passages_summary}\n\n"
-            "DIRECTIVE FOR LLM: Directly answer the user's specific inquiry using these verified factual excerpts. "
-            "Focus specifically on the core subject requested. "
+            f"VERIFIED CONTEXT PASSAGES:\n{passages_summary}\n\n"
+            "DIRECTIVE FOR LLM: Directly answer the user's specific inquiry using ONLY these verified factual excerpts. "
+            "Format the key information into clean, distinct bullet points (• ). "
+            "Never invent outside dates, movies, or achievements that are not confirmed above. "
             "Never reply with generic cheerleading, filler comments, or game suggestions."
         )
 
@@ -174,7 +274,7 @@ class RelevanceAnalyzerAgent:
         metadata["facts_summary"] = facts_summary
         metadata["source_urls"] = [c.metadata.get("url") for c in filtered_chunks if c.metadata.get("url")]
 
-        logger.info(f"RelevanceAnalyzerAgent selected {len(filtered_chunks)} relevant facts.")
+        logger.info(f"RelevanceAnalyzerAgent successfully selected {len(filtered_chunks)} BM25-ranked facts.")
         return {
             "retrieved_context": filtered_chunks,
             "conversation_context": directive,

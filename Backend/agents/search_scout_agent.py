@@ -60,14 +60,14 @@ class SearchScoutAgent:
 
         # 1.5. If query relates to news or current events, pull authentic live national feeds directly
         is_news_query = any(w in last_user_msg.lower() for w in [
-            "news", "headline", "breaking", "happening", "today's events", "current events",
-            "the hindu", "ndtv", "times of india", "indian express", "india"
-        ])
+            "news", "headline", "headlines", "breaking news", "today's events", "current events",
+            "the hindu", "ndtv", "times of india", "indian express"
+        ]) and not any(w in last_user_msg.lower() for w in ["who is", "who was", "biography", "history", "tell me about", "what is", "facts about"])
         if is_news_query:
             try:
                 raw_keywords = [
                     w for w in re.sub(r"[^\w\s]", "", clean_q).split()
-                    if len(w) > 3 and w.lower() not in ["news", "latest", "breaking", "today", "date", "time", "tell"]
+                    if len(w) > 3 and w.lower() not in ["news", "latest", "breaking", "today", "date", "time", "tell", "india", "national"]
                 ]
                 direct_news = await self.crawler.fetch_direct_national_news(keywords=raw_keywords, max_results=4)
                 if direct_news:
@@ -77,24 +77,44 @@ class SearchScoutAgent:
                 logger.debug(f"Direct national news fetch error in SearchScout: {e}")
 
         # 2. Query search backends in priority order
+        is_encyclopedic = any(w in last_user_msg.lower() for w in ["who is", "who was", "biography", "history", "tell me about", "what is", "facts about", "explain about"])
+
+        # For biographical or encyclopedic topics, query Wikipedia first for high-authority grounded facts
+        if is_encyclopedic:
+            wiki_items = await self.crawler.fetch_wikipedia_search(clean_q, max_results=2)
+            all_candidates.extend(wiki_items)
+
         for q in queries:
             # Primary: Bing Live Search
             bing_items = await self.crawler.fetch_bing_search(q, max_results=3)
             all_candidates.extend(bing_items)
 
-            # Fallback to Wikipedia Knowledge if needed
-            if len(all_candidates) < 3:
-                wiki_items = await self.crawler.fetch_wikipedia_search(clean_q, max_results=2)
-                all_candidates.extend(wiki_items)
+            # Secondary: DuckDuckGo HTML Search
+            if len(all_candidates) < 4:
+                ddg_items = await self.crawler.fetch_duckduckgo_search(q, max_results=3)
+                all_candidates.extend(ddg_items)
 
-        # 3. Deduplicate by URL
+        if not is_encyclopedic and len(all_candidates) < 3:
+            wiki_items = await self.crawler.fetch_wikipedia_search(clean_q, max_results=2)
+            all_candidates.extend(wiki_items)
+
+        # 3. Deduplicate by URL and filter out noisy shopping / e-commerce domains
+        BLOCKED_DOMAINS = [
+            "flipkart.com", "amazon.com", "amazon.in", "myntra.com", "snapdeal.com",
+            "ebay.com", "walmart.com", "aliexpress.com", "etsy.com", "indiamart.com",
+            "facebook.com", "instagram.com", "twitter.com", "x.com"
+        ]
+
         seen_urls = set()
         deduped: List[Dict[str, Any]] = []
         for it in all_candidates:
             url = it.get("url", "").strip()
-            if url and url not in seen_urls:
-                seen_urls.add(url)
-                deduped.append(it)
+            if not url or url in seen_urls:
+                continue
+            if any(dom in url.lower() for dom in BLOCKED_DOMAINS):
+                continue
+            seen_urls.add(url)
+            deduped.append(it)
 
         # Convert to candidate RetrievedChunks
         candidate_chunks: List[RetrievedChunk] = []

@@ -8,7 +8,8 @@ MOMO is an enterprise-grade, local-first physical AI companion robot. It unifies
 
 ## 📑 Table of Contents
 1. [System Overview & Key Capabilities](#-system-overview--key-capabilities)
-2. [Complete Full-Stack Architecture (End-to-End)](#-complete-full-stack-architecture-end-to-end)
+2. [Recent Updates](#-recent-updates)
+3. [Complete Full-Stack Architecture (End-to-End)](#-complete-full-stack-architecture-end-to-end)
    - [Tier 1: Physical Hardware & Embedded Firmware Layer](#tier-1-physical-hardware--embedded-firmware-layer-esp32)
    - [Tier 2: Sensory Perception & Computer Vision Layer](#tier-2-sensory-perception--computer-vision-layer)
    - [Tier 3: Gateway, Networking & Transport Layer](#tier-3-gateway-networking--transport-layer)
@@ -19,11 +20,34 @@ MOMO is an enterprise-grade, local-first physical AI companion robot. It unifies
    - [Tier 8: Desktop & Browser Automation Engine](#tier-8-desktop--browser-automation-engine)
    - [Tier 9: Local LLM Runtime & Hardware Acceleration](#tier-9-local-llm-runtime--hardware-acceleration)
    - [Tier 10: Frontend Client & Interactive UI Layer](#tier-10-frontend-client--interactive-ui-layer-react-18--vite--ts)
-3. [Life of a User Request (End-to-End Data Flow)](#-life-of-a-user-request-end-to-end-data-flow)
-4. [Comprehensive 30-Command Dual-Pass Verification Suite](#-comprehensive-30-command-dual-pass-verification-suite)
-5. [Codebase Organization](#-codebase-organization)
-6. [Quickstart & Operation Guide](#-quickstart--operation-guide)
-7. [License](#-license)
+4. [Life of a User Request (End-to-End Data Flow)](#-life-of-a-user-request-end-to-end-data-flow)
+5. [Comprehensive 30-Command Dual-Pass Verification Suite](#-comprehensive-30-command-dual-pass-verification-suite)
+6. [Codebase Organization](#-codebase-organization)
+7. [Quickstart & Operation Guide](#-quickstart--operation-guide)
+8. [License](#-license)
+
+---
+
+## 🔄 Recent Updates
+
+> All changes below were introduced after the initial full-architecture documentation and represent active improvements to robustness, reliability, and intelligence.
+
+### September 2026 — Stability, Intelligence & UX Overhaul
+
+| Commit | Area | Summary |
+|--------|------|---------|
+| `14ae1a5` | **Memory** | Maintain multi-turn chat memory and resolve anaphoric follow-up queries across agents — conversation context is now correctly threaded through `ConversationAgent`, `SearchScoutAgent`, `RelevanceAnalyzerAgent`, and the root supervisor. |
+| `7ca1232` | **Vision** | Support low-clarity, dim, and noisy camera feeds with independent detector sizing and physiological skin chrominance filtering — FACS detection now succeeds in challenging lighting conditions. |
+| `cc3e10d` | **Crawler** | Eliminate hallucinations via BM25 passage ranking, multi-engine search, infobox sanitization, and strict grounding — web research squad no longer fabricates facts. |
+| `1946657` | **Response / Video** | Route knowledge queries to the web research squad and eliminate video stream proxy buffering with a smooth snapshot pipeline — general factual questions now reliably trigger the 4-stage research squad. |
+| `ed24a68` | **Vision / Voice / Crawl** | Optimize video to a true 30 FPS streaming pipeline, add Speech-to-Text (STT) voice recognition, fix TTS clipping artefacts, and streamline web crawling squad configuration. |
+| `779ed3b` | **LLM / UX** | Ensure dynamic LLM token generation (no caching stale responses), accelerate first-token latency, remove outdated quick-prompt shortcuts, and add scoped auto-scroll to the chat window. |
+| `4b61492` | **Frontend** | Fix truncated short-input responses, clean up code-block rendering in the chat UI, and smooth real-time video tracking. |
+| `c2e380f` | **Frontend** | Resolve blank-screen crash caused by a missing `streamError` state and absent `ErrorBoundary` wrapper. |
+| `3f9a744` | **Launcher** | Resolve Windows batch syntax errors and incorrect path quoting in `start.bat` and `start_momo.bat`. |
+| `8b8f5ab` | **Launcher** | Add automatic Node/npm PATH discovery, active server health polling, host-binding fixes, and reliable default-browser launching to the batch launchers. |
+| `2232a6e` | **AI / Automation** | Eliminate LLM hallucinations via strict grounding, enforce bulleted structure for long responses, and add an anti-tutorial desktop guard that refuses to narrate instead of acting. |
+| `eceb1d5` | **Vision / Crawling** | Resolve web-crawl hallucinations and fix video preview buffering race condition. |
 
 ---
 

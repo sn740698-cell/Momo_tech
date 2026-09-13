@@ -47,7 +47,8 @@ class ExpressionDetector:
     def __init__(self, model_path: Optional[str] = None):
         self.model_path = model_path or YUNET_MODEL_PATH
         self.detector: Optional[cv2.FaceDetectorYN] = None
-        self._current_input_size: Tuple[int, int] = (640, 480)
+        self._detector_input_size: Tuple[int, int] = (640, 480)
+        self._sensitive_input_size: Tuple[int, int] = (640, 480)
         self._init_detector()
 
         # Sensitive Low-Threshold YuNet detector for dark / low-res / blurry frames
@@ -85,7 +86,7 @@ class ExpressionDetector:
                 self.detector = cv2.FaceDetectorYN_create(
                     model=self.model_path,
                     config="",
-                    input_size=self._current_input_size,
+                    input_size=self._detector_input_size,
                     score_threshold=0.45,  # Relaxed for low-light & low-res
                     nms_threshold=0.3,
                     top_k=5000
@@ -103,8 +104,8 @@ class ExpressionDetector:
                 self.sensitive_detector = cv2.FaceDetectorYN_create(
                     model=self.model_path,
                     config="",
-                    input_size=self._current_input_size,
-                    score_threshold=0.25,  # Ultra-sensitive for low-megapixel frames
+                    input_size=self._sensitive_input_size,
+                    score_threshold=0.20,  # Ultra-sensitive for low-megapixel / low-clarity frames
                     nms_threshold=0.3,
                     top_k=5000
                 )
@@ -171,10 +172,11 @@ class ExpressionDetector:
 
     def enhance_frame(self, frame: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
-        Enhances low-clarity, blurry, or low-megapixel frames using:
+        Enhances low-clarity, blurry, low-light, or low-megapixel frames using:
         1. Bi-cubic upscaling if image is small (<480 width or <360 height)
-        2. Contrast-Limited Adaptive Histogram Equalization (CLAHE) on L-channel
-        3. Unsharp masking when spatial blur is detected
+        2. Dynamic range expansion / adaptive gamma correction for low-light frames
+        3. Contrast-Limited Adaptive Histogram Equalization (CLAHE) on L-channel
+        4. Edge-preserving noise suppression & unsharp masking for soft/blurry camera feeds
         """
         if frame is None or not isinstance(frame, np.ndarray) or frame.size == 0:
             return frame, {"clarity_boosted": False, "upscaled": False, "laplacian_var": 0.0}
@@ -184,7 +186,7 @@ class ExpressionDetector:
         scale_factor = 1.0
         work_frame = frame
 
-        # 1. Upscale if camera has very low resolution
+        # 1. Upscale if camera has low resolution (< 480w or < 360h)
         if w < 480 or h < 360:
             scale_factor = max(480.0 / w, 360.0 / h)
             new_w = int(w * scale_factor)
@@ -196,18 +198,28 @@ class ExpressionDetector:
         gray = cv2.cvtColor(work_frame, cv2.COLOR_BGR2GRAY)
         lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
-        # 3. CLAHE Contrast Equalization in LAB space
+        # 3. Dynamic Range Expansion & CLAHE in LAB space
         lab = cv2.cvtColor(work_frame, cv2.COLOR_BGR2LAB)
         l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8))
+        mean_l = float(np.mean(l))
+
+        # Adaptive gamma boost for dark / poorly lit camera feeds
+        if mean_l < 95.0:
+            gamma = 1.0 + min(1.2, (95.0 - mean_l) / 60.0)
+            inv_gamma = 1.0 / gamma
+            lut = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype('uint8')
+            l = cv2.LUT(l, lut)
+
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         cl = clahe.apply(l)
         enhanced = cv2.cvtColor(cv2.merge((cl, a, b)), cv2.COLOR_LAB2BGR)
 
-        # 4. Unsharp Masking if camera sensor is soft or out of focus
+        # 4. Noise suppression & Unsharp Masking for soft or out-of-focus camera sensors
         clarity_boosted = False
         if lap_var < 150.0:
-            gaussian = cv2.GaussianBlur(enhanced, (0, 0), sigmaX=2.0)
-            enhanced = cv2.addWeighted(enhanced, 1.30, gaussian, -0.30, 0)
+            gaussian = cv2.GaussianBlur(enhanced, (0, 0), sigmaX=1.8)
+            enhanced = cv2.addWeighted(enhanced, 1.25, gaussian, -0.25, 0)
+            enhanced = cv2.bilateralFilter(enhanced, d=5, sigmaColor=35, sigmaSpace=35)
             clarity_boosted = True
 
         return enhanced, {
@@ -215,6 +227,7 @@ class ExpressionDetector:
             "upscaled": upscaled,
             "scale_factor": scale_factor,
             "laplacian_var": round(lap_var, 1),
+            "mean_luminance": round(mean_l, 1),
         }
 
     # =========================================================================
@@ -240,8 +253,8 @@ class ExpressionDetector:
 
         # Tier 1: YuNet on native frame
         if self.detector is not None:
-            if (w, h) != self._current_input_size:
-                self._current_input_size = (w, h)
+            if (w, h) != self._detector_input_size:
+                self._detector_input_size = (w, h)
                 self.detector.setInputSize((w, h))
             try:
                 _, detected = self.detector.detect(frame)
@@ -253,8 +266,8 @@ class ExpressionDetector:
         # Tier 2: YuNet on enhanced frame
         if self.detector is not None and enhanced_frame is not None:
             eh, ew = enhanced_frame.shape[:2]
-            if (ew, eh) != self._current_input_size:
-                self._current_input_size = (ew, eh)
+            if (ew, eh) != self._detector_input_size:
+                self._detector_input_size = (ew, eh)
                 self.detector.setInputSize((ew, eh))
             try:
                 _, detected = self.detector.detect(enhanced_frame)
@@ -278,11 +291,11 @@ class ExpressionDetector:
             except Exception as e:
                 logger.debug(f"YuNet enhanced detection error: {e}")
 
-        # Tier 3: Sensitive YuNet on enhanced frame (down to 0.25 confidence)
+        # Tier 3: Sensitive YuNet on enhanced frame (down to 0.20 confidence)
         if self.sensitive_detector is not None and enhanced_frame is not None:
             eh, ew = enhanced_frame.shape[:2]
-            if (ew, eh) != self._current_input_size:
-                self._current_input_size = (ew, eh)
+            if (ew, eh) != self._sensitive_input_size:
+                self._sensitive_input_size = (ew, eh)
                 self.sensitive_detector.setInputSize((ew, eh))
             try:
                 _, detected = self.sensitive_detector.detect(enhanced_frame)
@@ -305,38 +318,45 @@ class ExpressionDetector:
             except Exception as e:
                 logger.debug(f"YuNet sensitive detection error: {e}")
 
-        # Tier 4: Chrominance Skin-Color Ellipse Detector (for extreme low clarity, noise, or blur)
+        # Tier 4: Physiological Chrominance Skin-Color Ellipse Detector (for extreme low clarity, noise, or blur)
         try:
-            target_img = enhanced_frame if enhanced_frame is not None else frame
-            th, tw = target_img.shape[:2]
-            ycrcb = cv2.cvtColor(target_img, cv2.COLOR_BGR2YCrCb)
-            mask = cv2.inRange(ycrcb, (40, 130, 70), (255, 180, 130))
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            valid_contours = []
-            for c in contours:
-                area = cv2.contourArea(c)
-                if area > (tw * th * 0.03):  # Face occupies at least 3% of frame
-                    cx, cy, cw, ch = cv2.boundingRect(c)
-                    aspect = ch / max(1.0, float(cw))
-                    if 1.0 <= aspect <= 2.2:  # Typical human face aspect ratio
-                        valid_contours.append((area, cx, cy, cw, ch))
-            if valid_contours:
-                valid_contours.sort(key=lambda x: x[0], reverse=True)
-                _, cx, cy, cw, ch = valid_contours[0]
-                inv = 1.0 / scale_factor if scale_factor != 1.0 else 1.0
-                rx, ry, rw, rh = cx * inv, cy * inv, cw * inv, ch * inv
-                synthetic = np.array([[
-                    rx, ry, rw, rh,
-                    rx + (rw * 0.32), ry + (rh * 0.38),
-                    rx + (rw * 0.68), ry + (rh * 0.38),
-                    rx + (rw * 0.50), ry + (rh * 0.58),
-                    rx + (rw * 0.34), ry + (rh * 0.78),
-                    rx + (rw * 0.66), ry + (rh * 0.78),
-                    0.65
-                ]], dtype=np.float32)
-                return synthetic, "chroma_skin_ellipse"
+            for target_img, s_factor in [(frame, 1.0), (enhanced_frame, scale_factor)]:
+                if target_img is None:
+                    continue
+                th, tw = target_img.shape[:2]
+                total_area = float(tw * th)
+                ycrcb = cv2.cvtColor(target_img, cv2.COLOR_BGR2YCrCb)
+                y, cr, cb = cv2.split(ycrcb)
+                # Biometric skin chrominance: Cr > Cb distinguishes skin from neutral grays/shadows
+                skin_mask = (cr >= 132) & (cr <= 182) & (cb >= 75) & (cb <= 130) & (cr > cb)
+                mask = (skin_mask.astype(np.uint8) * 255)
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+                mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                valid_contours = []
+                for c in contours:
+                    area = cv2.contourArea(c)
+                    frac = area / max(1.0, total_area)
+                    if 0.02 <= frac <= 0.85:  # Face occupies 2% to 85% of frame
+                        cx, cy, cw, ch = cv2.boundingRect(c)
+                        aspect = ch / max(1.0, float(cw))
+                        if 0.6 <= aspect <= 2.5:  # Realistic human head/face aspect ratio
+                            valid_contours.append((area, cx, cy, cw, ch))
+                if valid_contours:
+                    valid_contours.sort(key=lambda x: x[0], reverse=True)
+                    _, cx, cy, cw, ch = valid_contours[0]
+                    inv = 1.0 / s_factor if s_factor != 1.0 else 1.0
+                    rx, ry, rw, rh = cx * inv, cy * inv, cw * inv, ch * inv
+                    synthetic = np.array([[
+                        rx, ry, rw, rh,
+                        rx + (rw * 0.32), ry + (rh * 0.38),
+                        rx + (rw * 0.68), ry + (rh * 0.38),
+                        rx + (rw * 0.50), ry + (rh * 0.58),
+                        rx + (rw * 0.34), ry + (rh * 0.78),
+                        rx + (rw * 0.66), ry + (rh * 0.78),
+                        0.65
+                    ]], dtype=np.float32)
+                    return synthetic, "chroma_skin_ellipse"
         except Exception as e:
             logger.debug(f"Skin chroma detector error: {e}")
 

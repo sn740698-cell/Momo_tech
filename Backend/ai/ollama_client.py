@@ -94,6 +94,7 @@ class OllamaClient:
                 "temperature": float(temperature),
                 "num_ctx": 2048,
                 "num_predict": num_predict,
+                "num_thread": min(8, os.cpu_count() or 4),
                 "top_k": 40,
                 "top_p": 0.9,
             }
@@ -174,6 +175,7 @@ class OllamaClient:
                 "temperature": float(temperature),
                 "num_ctx": 2048,
                 "num_predict": num_predict,
+                "num_thread": min(8, os.cpu_count() or 4),
                 "top_k": 40,
                 "top_p": 0.9,
             }

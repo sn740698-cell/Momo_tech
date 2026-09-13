@@ -199,6 +199,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState<boolean>(voiceEngine.isVoiceEnabled());
   const [activeSpokenId, setActiveSpokenId] = useState<string | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -209,7 +210,42 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     return unsub;
   }, []);
 
-  // Removed auto-scroll on send/isThinking per user requirement: viewport remains steady when sending messages
+  // Automatic scrolling strictly inside the chatbot container (never scrolls full window or app)
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior,
+    });
+  };
+
+  // Scroll when new messages are added or thinking indicator triggers
+  useEffect(() => {
+    scrollToBottom('smooth');
+  }, [messages, isThinking]);
+
+  // MutationObserver tracks expanding text / streaming responses inside chatbot
+  // and keeps scrolling until the response completes rendering
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const observer = new MutationObserver(() => {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'smooth',
+      });
+    });
+
+    observer.observe(container, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   const handleSend = () => {
     if (!input.trim() || isThinking) return;
@@ -238,13 +274,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
-
-  const quickPrompts = [
-    "What's the status of invoice INV-1042?",
-    "Draft a friendly reminder for Rahul's overdue balance.",
-    "Hey MOMO, how are you feeling today?",
-    "Show me system health and VRAM telemetry.",
-  ];
 
   return (
     <div className="flex flex-col h-full bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
@@ -301,7 +330,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       </div>
 
       {/* Messages Stream */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg) => {
           const isUser = msg.role === 'user';
           return (
@@ -424,21 +453,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
         <div ref={bottomRef} />
       </div>
-
-      {/* Quick Prompts Bar */}
-      {messages.length <= 2 && (
-        <div className="px-4 py-2 flex flex-wrap gap-2 border-t border-slate-800/80 bg-slate-900/40">
-          {quickPrompts.map((p, idx) => (
-            <button
-              key={idx}
-              onClick={() => onSendMessage(p)}
-              className="text-xs px-3 py-1.5 rounded-xl bg-slate-800/90 text-slate-300 border border-slate-700/60 hover:border-emerald-500/50 hover:text-emerald-300 transition-all text-left"
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Input Box */}
       <div className="p-3 bg-slate-800/80 border-t border-slate-700/80">

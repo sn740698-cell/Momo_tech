@@ -203,7 +203,7 @@ class ConversationAgent:
                 f"- DO NOT mention, invent, or summarize past actions or tasks.\n"
                 f"- Keep it concise, friendly, and welcoming."
             )
-            predict_tokens = 64
+            predict_tokens = 60
             model_temp = 0.3
         elif is_code_request:
             user_turn_content = (
@@ -213,7 +213,7 @@ class ConversationAgent:
                 f"- Strictly preserve standard indentation (4 spaces), spacing, and newlines for all code blocks.\n"
                 f"- Keep any accompanying explanation concise and directly relevant."
             )
-            predict_tokens = 600
+            predict_tokens = 450
             model_temp = 0.2
         elif is_automation and auto_summary_text:
             user_turn_content = (
@@ -222,7 +222,7 @@ class ConversationAgent:
                 f"Confirm cheerfully in ONE sentence that it is opened for them. NEVER provide manual tutorial steps, how-to instructions, or keyboard shortcuts."
             )
             timeout_val = 5
-            predict_tokens = 96
+            predict_tokens = 80
             model_temp = 0.1
         elif is_research and combined_grounding:
             user_turn_content = (
@@ -231,10 +231,10 @@ class ConversationAgent:
                 f"{combined_grounding[:2200]}\n\n"
                 f"Instructions: Directly answer the question using ONLY the verified facts above. Organize key points into clear bullet points (• ). Never invent outside facts or events."
             )
-            predict_tokens = 500
+            predict_tokens = 320
             model_temp = 0.0  # Greedy deterministic decoding
         else:
-            predict_tokens = 320
+            predict_tokens = 200
             model_temp = 0.35
 
         # Sanitize prior history turns: remove internal prompt directives and prevent ghost task bleed
@@ -357,119 +357,11 @@ class ConversationAgent:
                 has_tutorial = any(pat.search(parsed_response.message) for pat in tutorial_patterns)
                 has_disclaimer = any(d in msg_lower for d in ["as an ai", "cannot open", "don't have access", "do not have access", "hands", "cutoff"])
 
-                # If LLM generated a tutorial, disclaimer, lacked target/verb, or gave empty text:
-                if has_tutorial or has_disclaimer or not (has_target and has_action_verb) or len(parsed_response.message) < 5:
-                    logger.info("Enforcing clean affirmative confirmation for desktop automation (tutorial/disclaimer intercepted).")
+                # Only fallback if LLM returned completely empty text
+                if not parsed_response.message or len(parsed_response.message.strip()) < 3:
                     parsed_response.message = clean_confirm
                     parsed_response.expression = "happy"
                     parsed_response.animation = "nod"
-
-            # Web research grounding & Anti-Hallucination verification
-            if combined_grounding or state.retrieved_context:
-                msg_text = parsed_response.message.strip()
-                msg_lower = msg_text.lower()
-
-                # Extract key query subject terms (excluding stop words)
-                stop_words = {
-                    "what", "is", "the", "a", "an", "of", "and", "or", "in", "on", "at", "to", "for",
-                    "with", "about", "tell", "me", "show", "give", "crawl", "web", "search", "google",
-                    "explain", "how", "why", "who", "when", "where", "please", "can", "you", "go",
-                    "details", "information", "summarize", "summary"
-                }
-                query_keywords = [
-                    w.lower() for w in re.split(r'\W+', last_user_msg)
-                    if len(w) > 3 and w.lower() not in stop_words
-                ]
-
-                # Hallucination flags:
-                is_too_short = len(msg_text) < 45
-                has_generic_filler = any(phrase in msg_lower for phrase in [
-                    "i am at your service", "you are currently looking at",
-                    "would you like me to summarize", "i am here to help",
-                    "i am momo", "how can i help you today"
-                ])
-                has_obsolete_content = any(phrase in msg_lower for phrase in [
-                    "2020", "2021", "2022", "global covid-19", "coronavirus pandemic"
-                ])
-                has_refusal_phrase = any(phrase in msg_lower for phrase in [
-                    "knowledge cutoff", "do not have access", "cannot access the web",
-                    "real-time information"
-                ])
-                # Drift check: if query has specific keywords (e.g. "python", "hackathon", "sih"), does LLM output mention ANY of them?
-                has_subject_drift = (
-                    bool(query_keywords) and
-                    not any(k in msg_lower for k in query_keywords)
-                )
-
-                # Source entity overlap check: does the LLM output actually use facts from the retrieved sources?
-                source_terms = set(
-                    w.lower() for w in re.findall(r'\b[A-Za-z0-9_-]{4,}\b', combined_grounding)
-                    if w.lower() not in stop_words
-                ) if combined_grounding else set()
-                response_terms = set(
-                    w.lower() for w in re.findall(r'\b[A-Za-z0-9_-]{4,}\b', msg_text)
-                    if w.lower() not in stop_words
-                )
-                term_overlap = len(response_terms.intersection(source_terms))
-                insufficient_overlap = (len(source_terms) >= 6 and term_overlap < 2)
-
-                is_hallucinating = (
-                    is_too_short or
-                    has_generic_filler or
-                    has_obsolete_content or
-                    has_refusal_phrase or
-                    has_subject_drift or
-                    insufficient_overlap
-                )
-
-                if is_hallucinating:
-                    logger.info("Hallucination or subject drift detected in web crawl response. Synthesizing verified factual response...")
-                    # Synthesize clean, structured response directly from verified facts and citations
-                    facts = []
-                    # Check metadata from RelevanceAnalyzerAgent
-                    if state.metadata and state.metadata.get("key_facts"):
-                        facts = state.metadata["key_facts"][:5]
-                    elif state.retrieved_context:
-                        for c in state.retrieved_context[:4]:
-                            src = c.metadata.get("source", "Verified Source") if c.metadata else "Verified Source"
-                            txt = c.content.strip()
-                            clean_c = re.sub(r'^\[[^\]]+\]:\s*', '', txt).strip()
-                            first_sentence = clean_c.split(". ")[0].strip() + "."
-                            facts.append(f"• ({src}) {first_sentence}")
-
-                    if facts:
-                        # Determine topic/header based on query intent
-                        is_news = any(w in last_user_msg.lower() for w in ["news", "headline", "breaking", "happening", "today", "yesterday", "india"])
-                        anchor = TemporalService.get_temporal_anchor()
-
-                        if is_news:
-                            header = f"Here are the live verified news updates as of {anchor['today_day']}, {anchor['today_readable']} ({anchor['current_time_readable']} {anchor['timezone']}):\n\n"
-                        else:
-                            # Direct crawl or research query
-                            clean_topic = last_user_msg.replace("web crawl", "").replace("crawl", "").replace("search", "").strip()
-                            header = f"Here are the verified key details from the web crawl for \"{clean_topic}\":\n\n"
-
-                        parsed_response.message = header + "\n\n".join(facts)
-                        parsed_response.expression = "thinking"
-                        parsed_response.animation = "nod"
-
-            # Temporal grounding: if user asks for date and time, ensure it is included
-            if any(w in last_user_msg.lower() for w in ["date and time", "current date", "what is the date", "what is the time"]):
-                anchor = TemporalService.get_temporal_anchor()
-                anchor_mention = f"Today is {anchor['today_day']}, {anchor['today_readable']} ({anchor['current_time_readable']} {anchor['timezone']})."
-                if not parsed_response.message.startswith("Today is"):
-                    parsed_response.message = f"{anchor_mention}\n\n{parsed_response.message}"
-
-            # Response verification against decomposed query chunks
-            coverage = QueryChunker.verify_response_coverage(query_decomp, parsed_response.message)
-            if not coverage.get("complete"):
-                missing = coverage.get("missing_chunks", [])
-                for m in missing:
-                    if m.get("intent_type") == "emotional_support" and not any(w in parsed_response.message.lower() for w in ["understand", "care", "proud", "breathe", "rest"]):
-                        parsed_response.message = (
-                            "I hear you, and I completely understand how demanding and stressful it can be when you're working so hard. "
-                            "Take a gentle breath — you're making real progress.\n\n" + parsed_response.message
-                        )
         else:
             # Graceful degraded response when Ollama is unreachable or timed out
             err = str(llm_result.get("error", "Local LLM service unavailable."))
@@ -551,13 +443,6 @@ class ConversationAgent:
         has_code = "```" in parsed_response.message or "def " in parsed_response.message or "class " in parsed_response.message or "import " in parsed_response.message
         if (is_informative or len(parsed_response.message) > 200) and not is_auto_task and not is_greeting and not has_code:
             parsed_response.message = ResponseParser.format_as_bullets(parsed_response.message)
-
-        # Clean code: Guard against memory recall hallucinations when no records exist
-        if state.conversation_context and "No saved memories found" in state.conversation_context:
-            lower_resp = parsed_response.message.lower()
-            if any(h in lower_resp for h in ["you are a", "your project is", "you told me", "you prefer"]):
-                parsed_response.message = "I have checked my memory records, and no matching details have been saved yet. Feel free to tell me what you would like me to remember!"
-                parsed_response.expression = "normal"
 
         # Build assistant message
         asst_msg = Message(
